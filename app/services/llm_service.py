@@ -18,8 +18,8 @@ logger = logging.getLogger("ranking_sys")
 class LLMService:
     def __init__(self):
         self.client = AsyncOpenAI(
-            api_key=settings.OPENAI_API_KEY,
-            base_url=settings.OPENAI_BASE_URL
+            api_key=settings.LLM_API_KEY,
+            base_url=settings.LLM_BASE_URL
         )
         self.encoder = tiktoken.get_encoding("cl100k_base") # Approximate for GPT-3.5/4
 

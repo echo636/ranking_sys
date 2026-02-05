@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI 智能排名系统</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🤖 AI 智能排名系统</h1>
+            <p class="subtitle">让 AI 帮你找到最佳选择</p>
+        </header>
+
+        <main>
+            <!-- Task Description Section -->
+            <section class="card">
+                <h2>📝 任务描述</h2>
+                <textarea 
+                    id="taskDescription" 
+                    placeholder="描述你的需求场景，例如：我这周末要在家办一个 5 人左右的小型聚会，预算 500 元以内..."
+                    rows="4"></textarea>
+            </section>
+
+            <!-- Candidates Section -->
+            <section class="card">
+                <div class="section-header">
+                    <h2>📋 候选列表</h2>
+                    <button id="addCandidateBtn" class="btn btn-secondary">+ 添加候选项</button>
+                </div>
+                
+                <div id="candidatesList" class="candidates-list">
+                    <!-- Candidates will be added here dynamically -->
+                </div>
+            </section>
+
+            <!-- Action Button -->
+            <div class="action-section">
+                <button id="rankBtn" class="btn btn-primary">🚀 开始分析</button>
+            </div>
+
+            <!-- Loading Indicator -->
+            <div id="loadingIndicator" class="loading-indicator" style="display: none;">
+                <div class="spinner"></div>
+                <p>AI 正在分析中，请稍候...</p>
+            </div>
+
+            <!-- Results Section -->
+            <section id="resultsSection" class="card results-section" style="display: none;">
+                <h2>✨ 分析结果</h2>
+                <div class="result-content">
+                    <div class="result-item">
+                        <label>最佳选择：</label>
+                        <div id="bestChoice" class="best-choice"></div>
+                    </div>
+                    <div class="result-item">
+                        <label>决策理由：</label>
+                        <div id="reasoning" class="reasoning"></div>
+                    </div>
+                    <div class="result-item">
+                        <label>处理耗时：</label>
+                        <div id="processingTime" class="processing-time"></div>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Error Message -->
+            <div id="errorMessage" class="error-message" style="display: none;"></div>
+        </main>
+
+        <footer>
+            <p>Powered by FastAPI + OpenAI</p>
+        </footer>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
