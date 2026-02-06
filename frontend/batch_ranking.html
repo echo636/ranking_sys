@@ -188,7 +188,7 @@
 <body>
     <div class="container">
         <header class="header">
-            <h1>📊 批量对抗系统</h1>
+            <h1>批量对抗系统</h1>
             <p>AI 自动生成场景，批量评测候选项胜率</p>
             <a href="index.html" class="back-link">← 返回单次模式</a>
         </header>
@@ -206,7 +206,7 @@
             <!-- Step 1: 设置候选项 -->
             <section id="step1" class="active">
                 <div class="card">
-                    <h2>📦 添加候选项 (2-5个)</h2>
+                    <h2>添加候选项 (2-5个)</h2>
                     <p class="hint-text">支持输入商品信息或 URL。为了获得最佳效果，建议输入 2-3 个具体的候选项。</p>
 
                     <div id="candidatesContainer">
@@ -228,7 +228,7 @@
             <!-- Step 2: 生成场景 -->
             <section id="step2">
                 <div class="card">
-                    <h2>🎬 生成测试场景</h2>
+                    <h2>生成测试场景</h2>
                     <div class="config-row">
                         <label>生成数量：</label>
                         <select id="scenarioCount">
@@ -250,7 +250,7 @@
 
                 <div class="action-bar">
                     <button class="btn btn-secondary back-btn" data-target="step1">← 上一步</button>
-                    <button id="generateBtn" class="btn btn-primary">🔄 生成/刷新场景</button>
+                    <button id="generateBtn" class="btn btn-primary">生成/刷新场景</button>
                     <button id="goToStep3Btn" class="btn btn-primary" style="display: none;">
                         下一步：开始测试 →
                     </button>
@@ -260,7 +260,7 @@
             <!-- Step 3: 批量运行 -->
             <section id="step3">
                 <div class="card" style="text-align: center; padding: 3rem 1rem;">
-                    <h2>🚀 正在执行批量对抗</h2>
+                    <h2>正在执行批量对抗</h2>
                     <p>AI 正在模拟不同用户场景进行评测，请稍候...</p>
 
                     <div class="progress-container">
@@ -278,7 +278,7 @@
 
                 <div class="action-bar" style="justify-content: center;">
                     <button id="startTestBtn" class="btn btn-primary btn-large">
-                        ▶️ 开始批量测试
+                        开始批量测试
                     </button>
                 </div>
             </section>
@@ -301,7 +301,7 @@
                 </div>
 
                 <div class="card">
-                    <h3>📄 详细评测记录</h3>
+                    <h3>详细评测记录</h3>
                     <div style="overflow-x: auto;">
                         <table class="detail-table">
                             <thead>
@@ -320,7 +320,7 @@
                 </div>
 
                 <div class="action-bar">
-                    <button class="btn btn-secondary" onclick="location.reload()">🔄 开始新的测试</button>
+                    <button class="btn btn-secondary" onclick="location.reload()">开始新的测试</button>
                 </div>
             </section>
 

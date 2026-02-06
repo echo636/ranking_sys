@@ -136,7 +136,7 @@ async function generateScenarios() {
 function renderScenarios() {
     scenariosList.innerHTML = state.scenarios.map((s, i) => `
         <div class="scenario-card">
-            <h4>鍦烘櫙 ${i + 1}</h4>
+            <h4>场景 ${i + 1}</h4>
             <p>${s.description}</p>
         </div>
     `).join('');
