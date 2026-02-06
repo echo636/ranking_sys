@@ -1,0 +1,347 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>批量对抗系统 - AI Ranking</title>
+    <link rel="stylesheet" href="style.css">
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        /* 批量模式特有样式 */
+        .wizard-steps {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 2rem;
+            background: rgba(255, 255, 255, 0.8);
+            padding: 1rem;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+        }
+
+        .step-item {
+            flex: 1;
+            text-align: center;
+            color: #718096;
+            font-weight: 500;
+            position: relative;
+        }
+
+        .step-item.active {
+            color: #667eea;
+            font-weight: 700;
+        }
+
+        .step-item.completed {
+            color: #48bb78;
+        }
+
+        .step-item::after {
+            content: '';
+            position: absolute;
+            top: 50%;
+            right: -50%;
+            width: 100%;
+            height: 2px;
+            background: #e2e8f0;
+            z-index: -1;
+        }
+
+        .step-item:last-child::after {
+            display: none;
+        }
+
+        .candidate-input-group {
+            display: flex;
+            gap: 1rem;
+            margin-bottom: 1rem;
+            align-items: flex-start;
+        }
+
+        .scenario-card {
+            background: white;
+            border: 1px solid #e2e8f0;
+            padding: 1rem;
+            border-radius: 8px;
+            margin-bottom: 0.8rem;
+            transition: all 0.2s;
+        }
+
+        .scenario-card:hover {
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+            border-color: #cbd5e0;
+        }
+
+        .scenario-card h4 {
+            margin-top: 0;
+            color: #4a5568;
+            font-size: 0.95rem;
+        }
+
+        .scenario-card p {
+            margin-bottom: 0.5rem;
+            color: #2d3748;
+            font-size: 0.9rem;
+        }
+
+        .progress-container {
+            margin: 2rem 0;
+            text-align: center;
+        }
+
+        .progress-bar-bg {
+            background: #edf2f7;
+            height: 12px;
+            border-radius: 6px;
+            overflow: hidden;
+            margin-bottom: 0.5rem;
+        }
+
+        .progress-bar-fill {
+            background: linear-gradient(90deg, #667eea 0%, #764ba2 100%);
+            height: 100%;
+            width: 0%;
+            transition: width 0.3s ease;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+        }
+
+        .stat-card {
+            background: white;
+            padding: 1.5rem;
+            border-radius: 12px;
+            text-align: center;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+        }
+
+        .stat-value {
+            font-size: 2rem;
+            font-weight: 700;
+            color: #2d3748;
+        }
+
+        .stat-label {
+            color: #718096;
+            font-size: 0.85rem;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .chart-container {
+            background: white;
+            padding: 1.5rem;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
+            margin-bottom: 2rem;
+            height: 400px;
+        }
+
+        .detail-table {
+            width: 100%;
+            border-collapse: collapse;
+            background: white;
+            border-radius: 8px;
+            overflow: hidden;
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+        }
+
+        .detail-table th,
+        .detail-table td {
+            padding: 1rem;
+            text-align: left;
+            border-bottom: 1px solid #e2e8f0;
+        }
+
+        .detail-table th {
+            background: #f7fafc;
+            font-weight: 600;
+            color: #4a5568;
+        }
+
+        .win-tag {
+            display: inline-block;
+            padding: 0.25rem 0.5rem;
+            border-radius: 4px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            background: #ebf8ff;
+            color: #3182ce;
+        }
+
+        /* 隐藏掉非当前步骤 */
+        section {
+            display: none;
+        }
+
+        section.active {
+            display: block;
+        }
+    </style>
+</head>
+
+<body>
+    <div class="container">
+        <header class="header">
+            <h1>📊 批量对抗系统</h1>
+            <p>AI 自动生成场景，批量评测候选项胜率</p>
+            <a href="index.html" class="back-link">← 返回单次模式</a>
+        </header>
+
+        <!-- 向导步骤 -->
+        <div class="wizard-steps">
+            <div class="step-item active" id="navStep1">1. 设置候选项</div>
+            <div class="step-item" id="navStep2">2. 生成场景</div>
+            <div class="step-item" id="navStep3">3. 运行测试</div>
+            <div class="step-item" id="navStep4">4. 分析报告</div>
+        </div>
+
+        <main class="main-content">
+
+            <!-- Step 1: 设置候选项 -->
+            <section id="step1" class="active">
+                <div class="card">
+                    <h2>📦 添加候选项 (2-5个)</h2>
+                    <p class="hint-text">支持输入商品信息或 URL。为了获得最佳效果，建议输入 2-3 个具体的候选项。</p>
+
+                    <div id="candidatesContainer">
+                        <!-- 动态添加候选项输入框 -->
+                    </div>
+
+                    <button id="addCandidateBtn" class="btn btn-secondary" style="margin-top: 1rem;">
+                        + 添加候选项
+                    </button>
+                </div>
+
+                <div class="action-bar">
+                    <button id="goToStep2Btn" class="btn btn-primary btn-large">
+                        下一步：生成测试场景 →
+                    </button>
+                </div>
+            </section>
+
+            <!-- Step 2: 生成场景 -->
+            <section id="step2">
+                <div class="card">
+                    <h2>🎬 生成测试场景</h2>
+                    <div class="config-row">
+                        <label>生成数量：</label>
+                        <select id="scenarioCount">
+                            <option value="5">5 个场景 (快速)</option>
+                            <option value="10" selected>10 个场景 (推荐)</option>
+                            <option value="20">20 个场景 (深度)</option>
+                        </select>
+                    </div>
+
+                    <div id="generationStatus" style="display: none; margin: 1rem 0; text-align: center;">
+                        <div class="spinner"></div>
+                        <p>AI 正在分析候选项并设计测试场景...</p>
+                    </div>
+
+                    <div id="scenariosList" class="scenarios-container">
+                        <!-- 场景列表 -->
+                    </div>
+                </div>
+
+                <div class="action-bar">
+                    <button class="btn btn-secondary back-btn" data-target="step1">← 上一步</button>
+                    <button id="generateBtn" class="btn btn-primary">🔄 生成/刷新场景</button>
+                    <button id="goToStep3Btn" class="btn btn-primary" style="display: none;">
+                        下一步：开始测试 →
+                    </button>
+                </div>
+            </section>
+
+            <!-- Step 3: 批量运行 -->
+            <section id="step3">
+                <div class="card" style="text-align: center; padding: 3rem 1rem;">
+                    <h2>🚀 正在执行批量对抗</h2>
+                    <p>AI 正在模拟不同用户场景进行评测，请稍候...</p>
+
+                    <div class="progress-container">
+                        <div class="progress-bar-bg">
+                            <div id="progressBarFill" class="progress-bar-fill"></div>
+                        </div>
+                        <p id="progressText">0 / 0 (0%)</p>
+                    </div>
+
+                    <div id="liveLogs"
+                        style="text-align: left; background: #f7fafc; padding: 1rem; border-radius: 8px; height: 200px; overflow-y: auto; font-family: monospace; font-size: 0.9rem;">
+                        <div class="log-item">等待开始...</div>
+                    </div>
+                </div>
+
+                <div class="action-bar" style="justify-content: center;">
+                    <button id="startTestBtn" class="btn btn-primary btn-large">
+                        ▶️ 开始批量测试
+                    </button>
+                </div>
+            </section>
+
+            <!-- Step 4: 结果报告 -->
+            <section id="step4">
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-value" id="totalTestsVal">0</div>
+                        <div class="stat-label">总测试场次</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-value" id="winnerVal" style="color: #667eea;">-</div>
+                        <div class="stat-label">综合胜出</div>
+                    </div>
+                </div>
+
+                <div class="chart-container">
+                    <canvas id="winRateChart"></canvas>
+                </div>
+
+                <div class="card">
+                    <h3>📄 详细评测记录</h3>
+                    <div style="overflow-x: auto;">
+                        <table class="detail-table">
+                            <thead>
+                                <tr>
+                                    <th style="width: 10%">#</th>
+                                    <th style="width: 40%">测试场景</th>
+                                    <th style="width: 15%">胜出者</th>
+                                    <th style="width: 35%">AI 决策理由</th>
+                                </tr>
+                            </thead>
+                            <tbody id="resultTableBody">
+                                <!-- 结果行 -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div class="action-bar">
+                    <button class="btn btn-secondary" onclick="location.reload()">🔄 开始新的测试</button>
+                </div>
+            </section>
+
+        </main>
+    </div>
+
+    <!-- 候选项模板 -->
+    <template id="candidateTemplate">
+        <div class="candidate-input-group">
+            <div style="flex: 1;">
+                <input type="text" class="candidate-name" placeholder="名称 (例如: iPhone 15)"
+                    style="width: 100%; margin-bottom: 0.5rem; padding: 8px; border: 1px solid #e2e8f0; border-radius: 6px;">
+                <textarea class="candidate-desc" placeholder="描述或粘贴 URL (例如: 256GB, 蓝色, 5999元...)" rows="3"
+                    style="width: 100%; padding: 8px; border: 1px solid #e2e8f0; border-radius: 6px;"></textarea>
+            </div>
+            <button class="btn btn-sm btn-remove"
+                style="padding: 4px 8px; background: #feb2b2; color: #c53030;">×</button>
+        </div>
+    </template>
+
+    <script src="batch_ranking.js"></script>
+</body>
+
+</html>

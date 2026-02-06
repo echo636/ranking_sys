@@ -28,6 +28,8 @@ app.add_middleware(
 
 # Include Routers
 app.include_router(ranking.router, prefix=f"{settings.API_V1_STR}", tags=["ranking"])
+from app.api.v1.endpoints import batch_ranking
+app.include_router(batch_ranking.router, prefix=f"{settings.API_V1_STR}/batch", tags=["batch_ranking"])
 
 @app.get("/")
 def health_check():
