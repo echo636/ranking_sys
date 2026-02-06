@@ -25,3 +25,8 @@ class RankingResponse(BaseModel):
     reasoning: str = Field(..., description="选择该候选的详细理由（包含对比分析）")
     # 可以选择性返回其他元数据
     processing_time: float = Field(0.0, description="处理耗时(秒)")
+
+class URLRankingRequest(BaseModel):
+    """URL-based ranking request"""
+    task_description: str = Field(..., description="评估任务描述，例如：比较这些技术博客的深度和质量")
+    urls: List[str] = Field(..., min_length=2, max_length=10, description="待比较的URL列表（2-10个）")
