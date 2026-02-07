@@ -19,19 +19,41 @@ document.addEventListener('DOMContentLoaded', () => {
     addCandidateInput();
     addCandidateInput();
 
-    // Bind Events
+
+    // --- Event Listeners ---
+
+    // 模式选择切换
+    document.querySelectorAll('input[name="generationMode"]').forEach(radio => {
+        radio.addEventListener('change', (e) => {
+            const customSection = document.getElementById('customQuerySection');
+            if (e.target.value === 'custom') {
+                customSection.style.display = 'block';
+            } else {
+                customSection.style.display = 'none';
+            }
+        });
+    });
+
+    // 添加候选项
     document.getElementById('addCandidateBtn').addEventListener('click', addCandidateInput);
-    document.getElementById('goToStep2Btn').addEventListener('click', handleStep1Submit);
+
+    // 生成场景
     document.getElementById('generateBtn').addEventListener('click', generateScenarios);
-    document.getElementById('goToStep3Btn').addEventListener('click', () => switchStep(3));
+
+    // 开始测试
     document.getElementById('startTestBtn').addEventListener('click', startBatchTest);
 
-    // Back buttons
+    // Step 导航
+    document.getElementById('goToStep2Btn').addEventListener('click', () => {
+        handleStep1Submit();
+    });
+
+    document.getElementById('goToStep3Btn').addEventListener('click', () => switchStep(3));
+
     document.querySelectorAll('.back-btn').forEach(btn => {
         btn.addEventListener('click', (e) => {
-            const target = e.target.dataset.target;
-            const stepNum = parseInt(target.replace('step', ''));
-            switchStep(stepNum);
+            const targetStep = e.target.dataset.target;
+            switchStep(parseInt(targetStep.replace('step', '')));
         });
     });
 });
@@ -86,50 +108,63 @@ function handleStep1Submit() {
 
     state.candidates = candidates;
     switchStep(2);
-
-    // Auto generate if empty
-    if (state.scenarios.length === 0) {
-        generateScenarios();
-    }
+    // 不再自动生成，让用户选择模式后手动点击"生成/刷新场景"按钮
 }
 
 // --- Step 2: Scenarios ---
 
 async function generateScenarios() {
+    const count = parseInt(document.getElementById('scenarioCount').value);
     const generateBtn = document.getElementById('generateBtn');
-    const statusDiv = document.getElementById('generationStatus');
-    const nextBtn = document.getElementById('goToStep3Btn');
+    const goToStep3Btn = document.getElementById('goToStep3Btn');
 
     generateBtn.disabled = true;
-    nextBtn.style.display = 'none';
-    scenariosList.innerHTML = '';
-    statusDiv.style.display = 'block';
+    generateBtn.textContent = '生成中...';
+    scenariosList.innerHTML = '<p style="text-align: center; color: #666;">AI 正在生成场景，请稍候...</p>';
 
     try {
-        const count = document.getElementById('scenarioCount').value;
+        // 检查生成模式
+        const mode = document.querySelector('input[name="generationMode"]:checked').value;
+        const customQuery = mode === 'custom' ? document.getElementById('customQueryInput').value.trim() : null;
+
+        // 验证自定义模式下必须输入 Query
+        if (mode === 'custom' && !customQuery) {
+            alert('请输入自定义 Query 模板');
+            generateBtn.disabled = false;
+            generateBtn.textContent = '生成/刷新场景';
+            return;
+        }
+
+        const payload = {
+            candidates: state.candidates,
+            num_scenarios: count
+        };
+
+        // 如果是自定义模式，添加 custom_query 字段
+        if (customQuery) {
+            payload.custom_query = customQuery;
+        }
 
         const response = await fetch('http://localhost:8000/api/v1/batch/generate-scenarios', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                candidates: state.candidates,
-                num_scenarios: parseInt(count)
-            })
+            body: JSON.stringify(payload)
         });
 
-        if (!response.ok) throw new Error('Generation failed');
+        if (!response.ok) throw new Error('Failed to generate scenarios');
 
         const data = await response.json();
         state.scenarios = data.scenarios;
 
         renderScenarios();
-        nextBtn.style.display = 'inline-block';
+        goToStep3Btn.style.display = 'inline-block';
 
     } catch (error) {
-        alert('鍦烘櫙鐢熸垚澶辫触: ' + error.message);
+        alert('生成场景失败: ' + error.message);
+        scenariosList.innerHTML = '';
     } finally {
         generateBtn.disabled = false;
-        statusDiv.style.display = 'none';
+        generateBtn.textContent = '生成/刷新场景';
     }
 }
 

@@ -47,11 +47,13 @@ async def generate_scenarios(
 ):
     """
     根据候选项生成测试场景 (Step 2)
+    支持自动生成或基于用户自定义 Query 模板生成
     """
     generator = PromptGeneratorService(service)
     scenarios = await generator.generate_scenarios(
         candidates=request.candidates,
-        num_scenarios=request.num_scenarios
+        num_scenarios=request.num_scenarios,
+        custom_query=request.custom_query  # 传递自定义 Query
     )
     return {"scenarios": scenarios}
 

@@ -1,5 +1,5 @@
 import json
-from typing import List
+from typing import List, Optional
 from app.schemas.ranking import Candidate
 from app.schemas.batch_ranking import TestScenario
 from app.services.llm_service import LLMService
@@ -12,10 +12,29 @@ class PromptGeneratorService:
     async def generate_scenarios(
         self,
         candidates: List[Candidate],
-        num_scenarios: int
+        num_scenarios: int,
+        custom_query: Optional[str] = None
     ) -> List[TestScenario]:
         """
         使用 LLM 生成带"具体情境"的测试场景
+        
+        Args:
+            candidates: 候选项列表
+            num_scenarios: 要生成的场景数量
+            custom_query: 可选的用户自定义 Query 模板
+        """
+        if custom_query:
+            return await self._generate_with_template(candidates, num_scenarios, custom_query)
+        else:
+            return await self._generate_auto(candidates, num_scenarios)
+
+    async def _generate_auto(
+        self,
+        candidates: List[Candidate],
+        num_scenarios: int
+    ) -> List[TestScenario]:
+        """
+        自动生成多样化的测试场景（原有逻辑）
         """
         # 1. 准备候选项描述
         candidates_text = self._format_candidates(candidates)
@@ -87,6 +106,93 @@ class PromptGeneratorService:
             print(f"Error generating scenarios: {e}")
             # Fallback for error cases or non-JSON models
             return self._fallback_scenarios(num_scenarios)
+
+    async def _generate_with_template(
+        self,
+        candidates: List[Candidate],
+        num_scenarios: int,
+        query_template: str
+    ) -> List[TestScenario]:
+        """
+        基于用户提供的 Query 模板生成场景变体
+        
+        Args:
+            candidates: 候选项列表
+            num_scenarios: 生成数量
+            query_template: 用户自定义的问题模板
+        
+        Example:
+            Input: "我是{用户类型}，目标是{具体目标}，哪个更适合？"
+            Output:
+            - "我是准备秋招的学生，目标是通过算法面试，哪个更适合？"
+            - "我是ACM选手，目标是训练高难度思维题，哪个更适合？"
+        """
+        candidates_text = self._format_candidates(candidates)
+        
+        system_prompt = f"""
+        你是一个专业的场景生成助手。用户提供了一个通用问题模板：
+
+        "{query_template}"
+
+        你的任务是基于这个模板，生成 {num_scenarios} 个**具体的、多样化的**场景变体。
+        
+        要求：
+        1. **保持模板结构**：核心问题框架不变
+        2. **填充具体细节**：
+           - 如果模板中有占位符（如 {{用户类型}}、{{目标}}），用具体内容替换
+           - 如果模板是完整问题，则围绕它生成不同背景/需求的变体
+        3. **确保多样性**：
+           - 不同的用户身份（学生/职场人/专家/新手）
+           - 不同的使用场景（时间紧急/长期规划/预算有限）
+           - 不同的优先级（性能/价格/易用性/品质）
+        4. **真实感**：每个场景应该像真实用户会问的问题
+        
+        候选项信息（供参考）：
+        {candidates_text}
+        """
+        
+        user_prompt = f"""
+        请生成 {num_scenarios} 个基于模板的具体场景。
+        
+        输出 JSON 格式：
+        {{
+            "scenarios": [
+                {{
+                    "scenario_id": "s_1",
+                    "description": "具体的场景描述..."
+                }},
+                ...
+            ]
+        }}
+        """
+        
+        try:
+            response = await self.llm_service.client.chat.completions.create(
+                model=settings.MODEL_NAME,
+                messages=[
+                    {"role": "system", "content": system_prompt},
+                    {"role": "user", "content": user_prompt}
+                ],
+                temperature=0.8,  # 稍高温度以增加变体多样性
+                response_format={"type": "json_object"}
+            )
+            
+            content = response.choices[0].message.content
+            data = json.loads(content)
+            
+            scenarios = []
+            for item in data.get("scenarios", []):
+                scenarios.append(TestScenario(
+                    scenario_id=item.get("scenario_id", f"s_{len(scenarios)+1}"),
+                    description=item.get("description", "")
+                ))
+            
+            return scenarios
+            
+        except Exception as e:
+            print(f"Error generating scenarios with template: {e}")
+            return self._fallback_scenarios(num_scenarios)
+
 
     def _format_candidates(self, candidates: List[Candidate]) -> str:
         text = ""

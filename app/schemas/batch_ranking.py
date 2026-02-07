@@ -6,6 +6,10 @@ from app.schemas.ranking import Candidate
 class BatchRankingRequest(BaseModel):
     candidates: List[Candidate]
     num_scenarios: int = Field(5, ge=2, le=20, description="生成场景的数量，建议 5-10 个")
+    custom_query: Optional[str] = Field(
+        None,
+        description="可选：用户自定义的 Query 模板。如果提供，AI 将基于此生成场景变体；否则自动生成多样化场景"
+    )
 
 # 2. 测试场景
 class TestScenario(BaseModel):

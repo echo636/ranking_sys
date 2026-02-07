@@ -229,15 +229,48 @@
             <section id="step2">
                 <div class="card">
                     <h2>生成测试场景</h2>
+
+                    <!-- 模式选择 -->
+                    <div class="mode-selector"
+                        style="margin-bottom: 20px; padding: 15px; background: #f8f9fa; border-radius: 8px;">
+                        <label style="font-weight: 600; margin-bottom: 10px; display: block;">生成模式</label>
+                        <div style="display: flex; gap: 20px;">
+                            <label style="cursor: pointer;">
+                                <input type="radio" name="generationMode" value="auto" checked>
+                                自动生成（AI 自动创建多样化场景）
+                            </label>
+                            <label style="cursor: pointer;">
+                                <input type="radio" name="generationMode" value="custom">
+                                自定义模板（基于您的问题框架生成变体）
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- 自定义 Query 输入框 -->
+                    <div id="customQuerySection" style="display: none; margin-bottom: 20px;">
+                        <label style="font-weight: 600; margin-bottom: 8px; display: block;">
+                            自定义 Query 模板
+                            <span style="font-weight: normal; color: #666; font-size: 0.9rem;">
+                                （使用 {占位符} 或直接输入完整问题）
+                            </span>
+                        </label>
+                        <textarea id="customQueryInput"
+                            placeholder="例如：我是{用户类型}，目标是{具体目标}，应该选择哪个？&#10;或：作为一个编程初学者，我应该如何选择学习平台？" rows="3"
+                            style="width: 100%; padding: 12px; border: 2px solid #e0e0e0; border-radius: 8px; font-size: 0.95rem;"></textarea>
+                        <p style="color: #666; font-size: 0.85rem; margin-top: 5px;">
+                            💡 提示：AI 会基于您的模板生成多个具有不同背景和需求的场景变体
+                        </p>
+                    </div>
+
                     <div class="config-row">
                         <label>生成数量：</label>
                         <select id="scenarioCount">
                             <option value="5">5 个场景 (快速)</option>
                             <option value="10" selected>10 个场景 (推荐)</option>
+                            <option value="15">15 个场景</option>
                             <option value="20">20 个场景 (深度)</option>
                         </select>
                     </div>
-
                     <div id="generationStatus" style="display: none; margin: 1rem 0; text-align: center;">
                         <div class="spinner"></div>
                         <p>AI 正在分析候选项并设计测试场景...</p>
