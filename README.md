@@ -30,12 +30,12 @@ pip install -r requirements.txt
 创建 `.env` 文件：
 
 ```bash
-OPENAI_API_KEY=your_api_key_here
-OPENAI_BASE_URL=https://api.openai.com/v1
+LLM_API_KEY=your_api_key_here
+LLM_BASE_URL=https://api.openai.com/v1
 MODEL_NAME=gpt-4
 
 # 或使用其他 OpenAI 兼容 API
-# OPENAI_BASE_URL=https://api.deepseek.com/v1
+# LLM_BASE_URL=https://api.deepseek.com/v1
 # MODEL_NAME=deepseek-chat
 ```
 
