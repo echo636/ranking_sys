@@ -119,6 +119,25 @@ curl -X POST http://localhost:8000/api/v1/rank-urls \
 
 批量对抗系统提供三个核心端点，用于生成场景、执行批量测试和实时进度跟踪。
 
+**URL 自动抓取支持**：
+- 候选项可以使用 `url` 字段代替 `description`
+- 系统会自动抓取网页内容（在批量测试时）
+- 支持混合模式：部分用 URL，部分用描述
+
+**URL 使用示例**：
+```json
+{
+  "候选项": {
+    "id": "blog_1",
+    "name": "技术博客",
+    "info": {
+      "url": "https://www.ruanyifeng.com/blog/"
+      // 无需手动提供 description
+    }
+  }
+}
+```
+
 #### 3.1 `POST /api/v1/batch/generate-scenarios`
 
 生成多样化的测试场景（支持自动生成和自定义模板两种模式）。
@@ -299,9 +318,22 @@ async def track_progress(session_id):
   "info": {            # 详细信息
     "category": str,   # 可选：类别
     "description": str,# 可选：描述
+    "url": str,        # 可选：URL（批量测试时自动抓取）
     "price": float,    # 可选：价格
     "features": list   # 可选：特性列表
     # 支持任意自定义字段
+  }
+}
+```
+
+**URL 自动抓取示例**：
+```json
+{
+  "id": "blog_1",
+  "name": "阮一峰的网络日志",
+  "info": {
+    "category": "Tech Blog",
+    "url": "https://www.ruanyifeng.com/blog/"
   }
 }
 ```
