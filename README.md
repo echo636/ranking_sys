@@ -1,151 +1,202 @@
 # AI Ranking System
 
-一个基于 LLM 的智能选品系统，通过 AI 分析帮助您从多个候选项中选出最佳选择。
+基于大语言模型的智能排序系统，提供单次排序、URL 对比和批量对抗测试功能。
 
-[![Python](https://img.shields.io/badge/Python-3.10+-blue.svg)](https://www.python.org/downloads/)
+## 功能特性
 
+### 1. 单次排序 API
+根据任务描述，从多个候选项中选出最佳选择。
 
+### 2. URL 对比 API
+自动抓取网页内容并进行智能对比评估。
 
+### 3. 批量对抗测试系统 ⭐
+- **场景生成**：自动生成多样化测试场景或使用自定义模板
+- **批量测试**：并发执行多个场景测试，统计胜率
+- **实时进度**：WebSocket 实时推送测试进度
+- **URL 自动抓取**：候选项可直接使用 URL，自动抓取网页内容
+- **前端界面**：可视化操作界面，支持图表展示
 
 ## 快速开始
 
-### 1. 环境准备
-
-**要求**：
-- Python 3.10+
-- 任意 LLM API Key（OpenAI、DeepSeek、Qwen 或 Grok）
-
-### 2. 安装依赖
+### 安装依赖
 
 ```bash
-# 克隆项目
-git clone https://github.com/echo636/ranking_sys.git
-cd ranking_sys
-
-# 创建虚拟环境
-conda create -n ranking_sys python=3.10
-conda activate ranking_sys
-
-# 安装依赖
 pip install -r requirements.txt
 ```
 
-### 3. 配置 API
+### 配置环境变量
 
-复制配置模板并填入您的 API Key：
+创建 `.env` 文件：
 
 ```bash
-# 复制配置模板
-cp .env.example .env
+OPENAI_API_KEY=your_api_key_here
+OPENAI_BASE_URL=https://api.openai.com/v1
+MODEL_NAME=gpt-4
 
-# 编辑 .env 文件
-# 将 LLM_API_KEY 替换为您的真实 API Key
+# 或使用其他 OpenAI 兼容 API
+# OPENAI_BASE_URL=https://api.deepseek.com/v1
+# MODEL_NAME=deepseek-chat
 ```
 
-### 4. 启动后端
+### 启动服务
 
 ```bash
 uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
 ```
 
-后端将运行在 http://localhost:8000
+### 访问服务
 
-### 5. 启动前端
+- **前端界面**: http://localhost:8000/frontend/
+- **API 文档**: http://localhost:8000/docs
+- **批量测试**: http://localhost:8000/frontend/batch_ranking.html
 
-#### 方法 A: VS Code Live Server（推荐）
-1. 安装 VS Code 扩展 "Live Server"
-2. 右键 `frontend/index.html` → "Open with Live Server"
+## API 使用示例
 
-#### 方法 B: Python HTTP Server
-```bash
-cd frontend
-python -m http.server 5500
-```
-访问：http://localhost:5500
-
-### 6. 开始使用
-
-1. 在浏览器中打开前端页面
-2. 填写任务描述（例如："我要买一个适合聚会的商品，预算500元"）
-3. 添加 2-3 个候选项
-4. 点击"开始分析"查看 AI 推荐结果
-
-## 使用示例
-
-### API 调用示例
+### 单次排序
 
 ```python
-import requests
+import httpx
 
-payload = {
-    "task_description": "我这周末要在家办一个 5 人左右的小型聚会，预算 500 元以内。",
-    "candidates": [
-        {
-            "id": "item_1",
-            "name": "JBL Go 3 蓝牙音箱",
-            "info": {
-                "category": "电子产品",
-                "price": 299,
-                "currency": "CNY",
-                "description": "虽然体积小，但音量对于室内聚会足够，外观时尚。"
-            }
-        },
-        {
-            "id": "item_2",
-            "name": "Switch 游戏租赁",
-            "info": {
-                "category": "租赁服务",
-                "price": 58,
-                "currency": "CNY",
-                "description": "聚会气氛组神器，专门解决聚会冷场尴尬的问题。"
-            }
+async with httpx.AsyncClient() as client:
+    response = await client.post(
+        "http://localhost:8000/api/v1/rank",
+        json={
+            "task_description": "我想学习 Web 开发",
+            "candidates": [
+                {
+                    "id": "react",
+                    "name": "React",
+                    "info": {"description": "由 Facebook 开发的 UI 库"}
+                },
+                {
+                    "id": "vue",
+                    "name": "Vue.js",
+                    "info": {"description": "渐进式 JavaScript 框架"}
+                }
+            ]
         }
-    ]
-}
-
-response = requests.post("http://localhost:8000/api/v1/rank", json=payload)
-result = response.json()
-
-print(f"最佳选择: {result['best_candidate_id']}")
-print(f"理由: {result['reasoning']}")
-print(f"耗时: {result['processing_time']} 秒")
+    )
+    print(response.json())
 ```
 
-### 响应示例
+### 批量对抗测试（URL 模式）
 
-```json
-{
-  "best_candidate_id": "item_2",
-  "reasoning": "分析用户核心需求：预算500元以内，用于5人左右的小型家庭聚会，目标是提升氛围或让大家开心...",
-  "processing_time": 3.45
-}
+```python
+# 1. 生成场景（候选项使用 URL）
+scenarios_response = await client.post(
+    "http://localhost:8000/api/v1/batch/generate-scenarios",
+    json={
+        "candidates": [
+            {
+                "id": "blog_1",
+                "name": "阮一峰的网络日志",
+                "info": {"url": "https://www.ruanyifeng.com/blog/"}
+            },
+            {
+                "id": "blog_2",
+                "name": "廖雪峰的官方网站",
+                "info": {"url": "https://www.liaoxuefeng.com/"}
+            }
+        ],
+        "num_scenarios": 10
+    }
+)
+
+# 2. 执行批量测试（自动抓取 URL 内容）
+test_response = await client.post(
+    "http://localhost:8000/api/v1/batch/start-tests",
+    json={
+        "candidates": candidates,
+        "scenarios": scenarios_response.json()["scenarios"]
+    }
+)
+
+print(f"胜率: {test_response.json()['win_rate']}")
 ```
 
-## 配置说明
+### 自定义查询模板
 
-### 环境变量
+```python
+response = await client.post(
+    "http://localhost:8000/api/v1/batch/generate-scenarios",
+    json={
+        "candidates": candidates,
+        "num_scenarios": 10,
+        "custom_query": "我是{用户类型}，目标是{具体目标}，应该选择哪个？"
+    }
+)
+```
 
-| 变量名 | 说明 | 默认值 |
-|--------|------|--------|
-| `LLM_API_KEY` | LLM API 密钥（必需） | - |
-| `LLM_BASE_URL` | API 端点 URL（可选） | None |
-| `MODEL_NAME` | 模型名称 | gpt-3.5-turbo |
-| `MAX_CONTEXT_TOKENS` | 最大 Token 数 | 16000 |
-| `TOKEN_TRUNCATION_THRESHOLD` | 截断阈值 | 12000 |
+## 测试脚本
 
-
-## 测试
-
-运行测试脚本验证 API 是否正常工作：
+项目提供了多个测试脚本：
 
 ```bash
-python scripts/test_request.py
+# 单次排序测试
+python scripts/test_ranking.py
+
+# 批量对抗测试
+python scripts/test_batch_backend.py
+
+# 自定义模板测试
+python scripts/test_custom_query.py
+
+# URL 自动抓取测试
+python scripts/test_url_batch.py
 ```
+
+## 项目结构
+
+```
+ranking_sys/
+├── app/
+│   ├── api/v1/endpoints/      # API 端点
+│   │   ├── ranking.py         # 单次排序 & URL 对比
+│   │   └── batch_ranking.py   # 批量测试
+│   ├── services/              # 业务逻辑
+│   │   ├── llm_service.py     # LLM 调用服务
+│   │   ├── web_scraper.py     # 网页抓取服务
+│   │   ├── url_fetch_service.py    # URL 自动抓取
+│   │   ├── prompt_generator.py     # 场景生成服务
+│   │   └── batch_processor.py      # 批量处理服务
+│   └── schemas/               # 数据模型
+├── frontend/                  # 前端界面
+│   ├── index.html            # 单次排序界面
+│   └── batch_ranking.html    # 批量测试界面
+├── scripts/                   # 测试脚本
+└── API_DOCUMENTATION.md       # 完整 API 文档
+```
+
+## 核心功能说明
+
+### 批量对抗测试
+
+批量对抗测试系统可以：
+1. 自动生成多样化的用户场景
+2. 在每个场景下测试候选项的表现
+3. 统计胜率和详细结果
+4. 可视化展示对比数据
+
+
+### URL 自动抓取
+
+支持直接使用 URL 作为候选项：
+- 系统自动抓取网页内容
+- 提取标题、描述和正文
+
+
+### 自定义查询模板
+
+灵活定义场景生成模板：
+- 使用占位符（如 `{用户类型}`）
+- AI 自动生成多样化变体
+
+
 
 ## API 文档
 
-启动后端后，访问自动生成的 API 文档：
+查看完整 API 文档：
+- **在线文档**: http://localhost:8000/docs
+- **离线文档**: [API_DOCUMENTATION.md](./API_DOCUMENTATION.md)
 
-- **Swagger UI**: http://localhost:8000/docs
-- **ReDoc**: http://localhost:8000/redoc
-- **OpenAPI JSON**: http://localhost:8000/api/v1/openapi.json
