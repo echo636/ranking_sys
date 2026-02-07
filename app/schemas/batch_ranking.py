@@ -20,7 +20,13 @@ class TestScenario(BaseModel):
 class ScenarioGenerationResponse(BaseModel):
     scenarios: List[TestScenario]
 
-# 4. 单个场景的测试结果
+# 4. 批量测试请求
+class BatchTestRequest(BaseModel):
+    candidates: List[Candidate]
+    scenarios: List[TestScenario]
+    session_id: Optional[str] = Field(None, description="可选：WebSocket 会话 ID，用于实时进度推送")
+
+# 5. 单个场景的测试结果
 class ScenarioResult(BaseModel):
     scenario_id: str
     scenario_description: str
@@ -28,7 +34,7 @@ class ScenarioResult(BaseModel):
     reasoning: str
     processing_time: float
 
-# 5. 批量测试总结果
+# 6. 批量测试总结果
 class BatchRankingResult(BaseModel):
     total_tests: int
     results: Dict[str, int]  # {"item_1": 5, "item_2": 2}

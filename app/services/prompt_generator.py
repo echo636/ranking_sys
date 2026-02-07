@@ -197,8 +197,26 @@ class PromptGeneratorService:
     def _format_candidates(self, candidates: List[Candidate]) -> str:
         text = ""
         for i, c in enumerate(candidates):
-            text += f"{i+1}. {c.name}\n"
-            text += f"   描述: {c.info.description[:200]}...\n" # 截断避免过长
+            text += f"- {c.name} (ID: {c.id})\n"
+            
+            if hasattr(c.info, 'category') and c.info.category:
+                text += f"   类别: {c.info.category}\n"
+            
+            if hasattr(c.info, 'price') and c.info.price is not None:
+                text += f"   价格: {c.info.price}\n"
+            
+            # 处理 description 可能为 None 的情况
+            if hasattr(c.info, 'description') and c.info.description:
+                desc = c.info.description[:200]
+                if len(c.info.description) > 200:
+                    desc += "..."
+                text += f"   描述: {desc}\n"
+            
+            # 如果有 URL 但没有 description，显示 URL
+            if hasattr(c.info, 'url') and c.info.url and not (hasattr(c.info, 'description') and c.info.description):
+                text += f"   URL: {c.info.url}\n"
+            
+            text += "\n"
         return text
 
     def _fallback_scenarios(self, count: int) -> List[TestScenario]:

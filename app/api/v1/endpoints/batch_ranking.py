@@ -2,8 +2,8 @@ from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisco
 from typing import List, Dict
 from app.schemas.ranking import Candidate
 from app.schemas.batch_ranking import (
-    BatchRankingRequest, 
-    TestScenario, 
+    BatchRankingRequest,
+    BatchTestRequest,
     ScenarioGenerationResponse,
     BatchRankingResult
 )
@@ -47,37 +47,52 @@ async def generate_scenarios(
 ):
     """
     根据候选项生成测试场景 (Step 2)
-    支持自动生成或基于用户自定义 Query 模板生成
+    
+    注意：
+    - 场景生成只需要候选项的基本信息（名称、类别等）
+    - URL 内容抓取会在执行测试时进行，避免重复抓取
     """
+    # 生成场景（不抓取 URL，使用基本信息即可）
     generator = PromptGeneratorService(service)
     scenarios = await generator.generate_scenarios(
         candidates=request.candidates,
         num_scenarios=request.num_scenarios,
-        custom_query=request.custom_query  # 传递自定义 Query
+        custom_query=request.custom_query
     )
     return {"scenarios": scenarios}
 
 @router.post("/start-tests", response_model=BatchRankingResult)
-async def start_batch_tests(
-    candidates: List[Candidate],
-    scenarios: List[TestScenario],
-    session_id: str = None, # 可选：用于 WebSocket 进度推送
+async def start_tests(
+    request: BatchTestRequest,
     service: LLMService = Depends(get_llm_service)
 ):
     """
-    开始执行批量测试 (Step 3)
+    执行批量对抗测试 (Step 3)
+
+    支持 URL 自动抓取：
+    - 如果候选项包含 URL 但没有描述，会自动抓取内容
     """
+    from app.services.url_fetch_service import URLFetchService
+
+    # URL 自动抓取
+    url_service = URLFetchService()
+    enriched_candidates = await url_service.enrich_candidates_with_urls(
+        request.candidates
+    )
+
+    # 执行批量测试
     processor = BatchProcessorService(service)
     
     async def progress_callback(current, total):
-        if session_id:
-            await manager.send_progress(session_id, current, total)
-            
+        if request.session_id:
+            await manager.send_progress(request.session_id, current, total)
+    
     result = await processor.run_batch_ranking(
-        candidates=candidates,
-        scenarios=scenarios,
+        candidates=enriched_candidates,
+        scenarios=request.scenarios,
         progress_callback=progress_callback
     )
+    
     return result
 
 @router.websocket("/ws/progress/{session_id}")
