@@ -30,6 +30,8 @@ app.add_middleware(
 app.include_router(ranking.router, prefix=f"{settings.API_V1_STR}", tags=["ranking"])
 from app.api.v1.endpoints import batch_ranking
 app.include_router(batch_ranking.router, prefix=f"{settings.API_V1_STR}/batch", tags=["batch_ranking"])
+from app.api.v1.endpoints import tasks
+app.include_router(tasks.router, prefix=f"{settings.API_V1_STR}/tasks", tags=["tasks"])
 
 @app.get("/")
 def health_check():

@@ -54,11 +54,11 @@ async def test_custom_query():
         
         if response.status_code == 200:
             result = response.json()
-            print(f"✅ 成功生成 {len(result['scenarios'])} 个场景\n")
+            print(f"[OK] 成功生成 {len(result['scenarios'])} 个场景\n")
             for i, scenario in enumerate(result['scenarios'], 1):
                 print(f"场景 {i}: {scenario['description']}\n")
         else:
-            print(f"❌ 请求失败: {response.status_code}")
+            print(f"[FAIL] 请求失败: {response.status_code}")
             print(response.text)
     
     # 3. 测试场景 2：使用自定义 Query 模板
@@ -82,7 +82,7 @@ async def test_custom_query():
         
         if response.status_code == 200:
             result = response.json()
-            print(f"✅ 基于模板成功生成 {len(result['scenarios'])} 个场景变体\n")
+            print(f"[OK] 基于模板成功生成 {len(result['scenarios'])} 个场景变体\n")
             for i, scenario in enumerate(result['scenarios'], 1):
                 print(f"场景 {i}: {scenario['description']}\n")
             
@@ -90,7 +90,7 @@ async def test_custom_query():
             scenarios = result['scenarios']
             
         else:
-            print(f"❌ 请求失败: {response.status_code}")
+            print(f"[FAIL] 请求失败: {response.status_code}")
             print(response.text)
             return
     
@@ -115,14 +115,14 @@ async def test_custom_query():
         
         if response.status_code == 200:
             result = response.json()
-            print(f"\n✅ 批量测试完成！")
+            print(f"\n[OK] 批量测试完成！")
             print(f"总测试数: {result['total_tests']}")
             print(f"胜率统计:")
             for cand_id, rate in result['win_rate'].items():
                 cand_name = next(c['name'] for c in candidates if c['id'] == cand_id)
                 print(f"  - {cand_name}: {rate*100:.1f}%")
         else:
-            print(f"❌ 批量测试失败: {response.status_code}")
+            print(f"[FAIL] 批量测试失败: {response.status_code}")
             print(response.text)
 
 async def test_different_templates():
@@ -176,11 +176,11 @@ async def test_different_templates():
             
             if response.status_code == 200:
                 result = response.json()
-                print(f"✅ 生成 {len(result['scenarios'])} 个场景:")
+                print(f"[OK] 生成 {len(result['scenarios'])} 个场景:")
                 for j, scenario in enumerate(result['scenarios'], 1):
                     print(f"  {j}. {scenario['description']}")
             else:
-                print(f"❌ 失败: {response.status_code}")
+                print(f"[FAIL] 失败: {response.status_code}")
         
         print()
 
@@ -201,4 +201,4 @@ if __name__ == "__main__":
     if test_more.lower() == 'y':
         asyncio.run(test_different_templates())
     
-    print("\n✅ 测试完成！")
+    print("\n[OK] 测试完成！")

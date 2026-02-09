@@ -44,12 +44,12 @@ def test_batch_flow():
         )
         
         if response.status_code != 200:
-            print(f"❌ 生成失败: {response.text}")
+            print(f"[FAIL] 生成失败: {response.text}")
             return
             
         data = response.json()
         scenarios = data["scenarios"]
-        print(f"✅ 生成成功 ({time.time() - start_time:.2f}s)")
+        print(f"[OK] 生成成功 ({time.time() - start_time:.2f}s)")
         print(f"生成的场景数量: {len(scenarios)}")
         
         print("\n--- 场景预览 ---")
@@ -59,7 +59,7 @@ def test_batch_flow():
             print("-" * 30)
             
     except Exception as e:
-        print(f"❌ 请求异常: {e}")
+        print(f"[FAIL] 请求异常: {e}")
         return
 
     # 2. 测试批量运行
@@ -85,11 +85,11 @@ def test_batch_flow():
         )
         
         if response.status_code != 200:
-            print(f"❌ 运行失败: {response.text}")
+            print(f"[FAIL] 运行失败: {response.text}")
             return
             
         result = response.json()
-        print(f"✅ 运行完成 ({time.time() - start_time:.2f}s)")
+        print(f"[OK] 运行完成 ({time.time() - start_time:.2f}s)")
         
         print("\n--- 统计结果 ---")
         print(f"总测试数: {result['total_tests']}")
@@ -102,7 +102,7 @@ def test_batch_flow():
             print(f"理由摘要: {detail['reasoning'][:100]}...")
             
     except Exception as e:
-        print(f"❌ 请求异常: {e}")
+        print(f"[FAIL] 请求异常: {e}")
 
 if __name__ == "__main__":
     test_batch_flow()

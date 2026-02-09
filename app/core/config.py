@@ -15,6 +15,9 @@ class Settings(BaseSettings):
     MAX_CONTEXT_TOKENS: int = 16000  # Safety limit
     TOKEN_TRUNCATION_THRESHOLD: int = 12000  # When to start truncating
     
+    # Redis for async task storage (optional, falls back to memory)
+    REDIS_URL: Optional[str] = None
+    
     class Config:
         case_sensitive = True
         env_file = ".env"

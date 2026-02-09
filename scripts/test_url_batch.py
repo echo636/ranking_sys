@@ -54,13 +54,13 @@ async def test_url_batch_ranking():
         if response.status_code == 200:
             result = response.json()
             scenarios = result['scenarios']
-            print(f"✅ 成功生成 {len(scenarios)} 个场景\n")
+            print(f"[OK] 成功生成 {len(scenarios)} 个场景\n")
             
             for i, scenario in enumerate(scenarios, 1):
                 print(f"场景 {i}: {scenario['description']}")
             
         else:
-            print(f"❌ 场景生成失败: {response.status_code}")
+            print(f"[FAIL] 场景生成失败: {response.status_code}")
             print(response.text)
             return
         
@@ -79,7 +79,7 @@ async def test_url_batch_ranking():
         
         if test_response.status_code == 200:
             test_result = test_response.json()
-            print("✅ 批量测试完成！\n")
+            print("[OK] 批量测试完成！\n")
             print(f"总测试数: {test_result['total_tests']}")
             print("\n胜率统计:")
             for cand_id, rate in test_result['win_rate'].items():
@@ -93,7 +93,7 @@ async def test_url_batch_ranking():
                 print(f"耗时: {detail['processing_time']:.2f}s")
                 
         else:
-            print(f"❌ 批量测试失败: {test_response.status_code}")
+            print(f"[FAIL] 批量测试失败: {test_response.status_code}")
             print(test_response.text)
 
 
@@ -136,11 +136,11 @@ async def test_mixed_candidates():
         
         if response.status_code == 200:
             scenarios = response.json()['scenarios']
-            print(f"✅ 成功生成 {len(scenarios)} 个场景\n")
+            print(f"[OK] 成功生成 {len(scenarios)} 个场景\n")
             for i, s in enumerate(scenarios, 1):
                 print(f"{i}. {s['description']}\n")
         else:
-            print(f"❌ 失败: {response.status_code}")
+            print(f"[FAIL] 失败: {response.status_code}")
 
 
 if __name__ == "__main__":
@@ -162,4 +162,4 @@ if __name__ == "__main__":
     if user_input.lower() == 'y':
         asyncio.run(test_mixed_candidates())
     
-    print("\n✅ 测试完成！")
+    print("\n[OK] 测试完成！")
