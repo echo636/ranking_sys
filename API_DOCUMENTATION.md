@@ -2,10 +2,13 @@
 
 ## 概述
 
-AI Ranking System 提供基于大语言模型的智能排序服务，支持三种核心功能：
+AI Ranking System 提供基于大语言模型的智能排序服务，支持同步和异步两种调用模式。
+
+**核心功能**：
 1. **单次排序**：基于任务描述评估多个候选项
 2. **URL 对比**：自动抓取网页内容并进行对比评估
 3. **批量对抗测试**：自动生成多样化场景并进行统计分析
+4. **异步任务**：支持 Webhook 回调的异步处理模式
 
 
 ## API 端点列表
@@ -54,22 +57,6 @@ AI Ranking System 提供基于大语言模型的智能排序服务，支持三�
 }
 ```
 
-**Python 示例**:
-```python
-import httpx
-
-async with httpx.AsyncClient() as client:
-    response = await client.post(
-        "http://localhost:8000/api/v1/rank",
-        json={
-            "task_description": "我想学习 Web 开发",
-            "candidates": [...]
-        }
-    )
-    result = response.json()
-    print(f"推荐: {result['best_candidate_id']}")
-```
-
 ---
 
 ### 2. URL 对比 API
@@ -103,69 +90,20 @@ async with httpx.AsyncClient() as client:
 - 仅支持静态网页（无 JavaScript 渲染）
 - 超时时间：10 秒/URL
 
-**curl 示例**:
-```bash
-curl -X POST http://localhost:8000/api/v1/rank-urls \
-  -H "Content-Type: application/json" \
-  -d '{
-    "task_description": "比较技术博客质量",
-    "urls": ["https://example1.com", "https://example2.com"]
-  }'
-```
-
 ---
 
 ### 3. 批量对抗测试 API
-
-批量对抗系统提供三个核心端点，用于生成场景、执行批量测试和实时进度跟踪。
-
-**URL 自动抓取支持**：
-- 候选项可以使用 `url` 字段代替 `description`
-- 系统会自动抓取网页内容（在批量测试时）
-- 支持混合模式：部分用 URL，部分用描述
-
-**URL 使用示例**：
-```json
-{
-  "候选项": {
-    "id": "blog_1",
-    "name": "技术博客",
-    "info": {
-      "url": "https://www.ruanyifeng.com/blog/"
-      // 无需手动提供 description
-    }
-  }
-}
-```
 
 #### 3.1 `POST /api/v1/batch/generate-scenarios`
 
 生成多样化的测试场景（支持自动生成和自定义模板两种模式）。
 
-**请求体（自动生成模式）**:
-```json
-{
-  "candidates": [
-    {
-      "id": "item_1",
-      "name": "选项 A",
-      "info": {
-        "category": "Product",
-        "description": "详细描述...",
-        "price": 100
-      }
-    }
-  ],
-  "num_scenarios": 10
-}
-```
-
-**请求体（自定义模板模式）**:
+**请求体**:
 ```json
 {
   "candidates": [...],
   "num_scenarios": 10,
-  "custom_query": "我是{用户类型}，目标是{具体目标}，应该选择哪个？"
+  "custom_query": "我是{用户类型}，目标是{具体目标}，应该选择哪个？"  // 可选
 }
 ```
 
@@ -173,38 +111,10 @@ curl -X POST http://localhost:8000/api/v1/rank-urls \
 ```json
 {
   "scenarios": [
-    {
-      "scenario_id": "s_1",
-      "description": "我是准备秋招的大学生，需要在 2 个月内快速提升算法能力..."
-    },
-    {
-      "scenario_id": "s_2",
-      "description": "我是职场新人，每天只有 1 小时刷题时间..."
-    }
+    {"scenario_id": "s_1", "description": "我是准备秋招的大学生..."},
+    {"scenario_id": "s_2", "description": "我是职场新人..."}
   ]
 }
-```
-
-**Python 示例**:
-```python
-# 自动生成
-response = await client.post(
-    "http://localhost:8000/api/v1/batch/generate-scenarios",
-    json={
-        "candidates": candidates,
-        "num_scenarios": 10
-    }
-)
-
-# 自定义模板
-response = await client.post(
-    "http://localhost:8000/api/v1/batch/generate-scenarios",
-    json={
-        "candidates": candidates,
-        "num_scenarios": 10,
-        "custom_query": "我是{用户}，需要{功能}，哪个更好？"
-    }
-)
 ```
 
 #### 3.2 `POST /api/v1/batch/start-tests`
@@ -215,12 +125,7 @@ response = await client.post(
 ```json
 {
   "candidates": [...],
-  "scenarios": [
-    {
-      "scenario_id": "s_1",
-      "description": "具体场景描述"
-    }
-  ],
+  "scenarios": [{"scenario_id": "s_1", "description": "..."}],
   "session_id": "optional-session-id"
 }
 ```
@@ -229,81 +134,197 @@ response = await client.post(
 ```json
 {
   "total_tests": 10,
-  "results": {
-    "item_1": 7,
-    "item_2": 3
-  },
-  "win_rate": {
-    "item_1": 0.7,
-    "item_2": 0.3
-  },
-  "scenario_details": [
-    {
-      "scenario_id": "s_1",
-      "scenario_description": "...",
-      "winner_id": "item_1",
-      "reasoning": "...",
-      "processing_time": 1.2
-    }
-  ]
+  "results": {"item_1": 7, "item_2": 3},
+  "win_rate": {"item_1": 0.7, "item_2": 0.3},
+  "scenario_details": [...]
 }
-```
-
-**Python 示例**:
-```python
-result = await client.post(
-    "http://localhost:8000/api/v1/batch/start-tests",
-    json={
-        "candidates": candidates,
-        "scenarios": scenarios,
-        "session_id": "test-123"  # 可选，用于 WebSocket 进度推送
-    },
-    timeout=120.0
-)
-
-print(f"总测试: {result['total_tests']}")
-for cand_id, rate in result['win_rate'].items():
-    print(f"{cand_id}: {rate*100:.1f}%")
 ```
 
 #### 3.3 `WebSocket /api/v1/batch/ws/progress/{session_id}`
 
 实时接收批量测试进度更新。
 
-**连接**:
-```javascript
-const ws = new WebSocket(
-  `ws://localhost:8000/api/v1/batch/ws/progress/${sessionId}`
-);
-
-ws.onmessage = (event) => {
-  const data = JSON.parse(event.data);
-  console.log(`进度: ${data.current}/${data.total} (${data.percentage}%)`);
-};
-```
-
 **消息格式**:
 ```json
+{"current": 5, "total": 10, "percentage": 50}
+```
+
+---
+
+### 4. 异步任务 API
+
+异步 API 适用于长时间运行的任务。提交后立即返回任务 ID，通过 **轮询** 或 **Webhook 回调** 获取结果。
+
+**使用场景**：
+- 需要立即响应用户，后台处理任务
+- 外部系统集成，避免 HTTP 超时
+- 批量任务处理
+
+**通用查询参数**：
+| 参数 | 类型 | 说明 |
+|------|------|------|
+| `webhook_url` | string (可选) | 任务完成时回调的 URL |
+
+**通用响应格式**：
+```json
 {
-  "current": 5,
-  "total": 10,
-  "percentage": 50
+  "task_id": "fd86bc84-6039-4084-8ae7-77e26f0f4da5",
+  "status": "pending",
+  "message": "任务已提交，正在后台处理"
 }
 ```
 
+#### 4.1 `POST /api/v1/rank/async`
+
+异步版本的排序 API。
+
+**请求体**: 与同步版 `/rank` 相同
+
 **Python 示例**:
 ```python
-import asyncio
-import websockets
+import httpx
 
-async def track_progress(session_id):
-    uri = f"ws://localhost:8000/api/v1/batch/ws/progress/{session_id}"
-    async with websockets.connect(uri) as ws:
-        while True:
-            message = await ws.recv()
-            data = json.loads(message)
-            print(f"进度: {data['percentage']}%")
+# 1. 提交任务
+response = httpx.post(
+    "http://localhost:8000/api/v1/rank/async",
+    params={"webhook_url": "https://your-server.com/callback"},
+    json={
+        "task_description": "选择最佳方案",
+        "candidates": [...]
+    }
+)
+task_id = response.json()["task_id"]
+
+# 2. 轮询状态（如果不使用 Webhook）
+while True:
+    status = httpx.get(f"http://localhost:8000/api/v1/tasks/{task_id}").json()
+    if status["status"] == "completed":
+        break
+    time.sleep(1)
+
+# 3. 获取结果
+result = httpx.get(f"http://localhost:8000/api/v1/tasks/{task_id}/result").json()
+print(result["best_candidate_id"])
 ```
+
+---
+
+#### 4.2 `POST /api/v1/rank-urls/async`
+
+异步版本的 URL 对比 API。
+
+**请求体**: 与同步版 `/rank-urls` 相同
+
+---
+
+#### 4.3 `POST /api/v1/batch/generate-scenarios/async`
+
+异步生成测试场景。
+
+**请求体**: 与同步版 `/batch/generate-scenarios` 相同
+
+---
+
+#### 4.4 `POST /api/v1/batch/start-tests/async`
+
+异步执行批量对抗测试。
+
+**请求体**: 与同步版 `/batch/start-tests` 相同
+
+---
+
+#### 4.5 `POST /api/v1/batch/run/async`
+
+一键批量测试（自动生成场景 + 执行测试），适合完整的自动化测试流程。
+
+**请求体**:
+```json
+{
+  "candidates": [
+    {"id": "item_1", "name": "选项A", "info": {...}},
+    {"id": "item_2", "name": "选项B", "info": {...}}
+  ],
+  "num_scenarios": 10,
+  "custom_query": "可选的自定义模板"
+}
+```
+
+**最终结果格式**（通过 `/tasks/{task_id}/result` 获取）:
+```json
+{
+  "scenarios": [
+    {"scenario_id": "s_1", "description": "..."},
+    {"scenario_id": "s_2", "description": "..."}
+  ],
+  "batch_result": {
+    "total_tests": 10,
+    "results": {"item_1": 7, "item_2": 3},
+    "win_rate": {"item_1": 0.7, "item_2": 0.3},
+    "scenario_details": [...]
+  }
+}
+```
+
+**curl 示例**:
+```bash
+# 提交任务
+curl -X POST "http://localhost:8000/api/v1/batch/run/async?webhook_url=https://your-server.com/callback" \
+  -H "Content-Type: application/json" \
+  -d '{"candidates": [...], "num_scenarios": 5}'
+
+# 响应: {"task_id": "xxx", "status": "pending", ...}
+
+# 查询状态
+curl http://localhost:8000/api/v1/tasks/xxx
+
+# 获取结果
+curl http://localhost:8000/api/v1/tasks/xxx/result
+```
+
+---
+
+### 5. 任务管理 API
+
+#### 5.1 `GET /api/v1/tasks/{task_id}`
+
+获取任务当前状态。
+
+**响应**:
+```json
+{
+  "task_id": "fd86bc84-...",
+  "task_type": "rank",
+  "status": "completed",
+  "created_at": "2026-02-09T13:09:30.560000",
+  "result": {...},
+  "error": null
+}
+```
+
+#### 5.2 `GET /api/v1/tasks/{task_id}/result`
+
+获取已完成任务的结果。
+
+**错误响应**: `404` 任务不存在 | `400` 任务未完成
+
+---
+
+### 6. Webhook 回调
+
+任务完成时，系统会向 `webhook_url` 发送 POST 请求。
+
+**回调格式**:
+```json
+{
+  "task_id": "fd86bc84-...",
+  "task_type": "rank",
+  "status": "completed",
+  "timestamp": "2026-02-09T13:09:40.842000",
+  "error": null
+}
+```
+
+**重试机制**: 失败后自动重试 3 次
 
 ---
 
@@ -311,62 +332,86 @@ async def track_progress(session_id):
 
 ### Candidate (候选项)
 
-```python
-{
-  "id": str,           # 唯一标识
-  "name": str,         # 名称
-  "info": {            # 详细信息
-    "category": str,   # 可选：类别
-    "description": str,# 可选：描述
-    "url": str,        # 可选：URL（批量测试时自动抓取）
-    "price": float,    # 可选：价格
-    "features": list   # 可选：特性列表
-    # 支持任意自定义字段
-  }
-}
-```
-
-**URL 自动抓取示例**：
 ```json
 {
-  "id": "blog_1",
-  "name": "阮一峰的网络日志",
+  "id": "string",           // 唯一标识
+  "name": "string",         // 名称
   "info": {
-    "category": "Tech Blog",
-    "url": "https://www.ruanyifeng.com/blog/"
+    "category": "string",   // 可选：类别
+    "description": "string",// 可选：描述
+    "url": "string",        // 可选：URL（批量测试时自动抓取）
+    "price": 0,             // 可选：价格
+    "features": []          // 可选：特性列表
   }
 }
 ```
 
 ### TestScenario (测试场景)
 
-```python
+```json
 {
-  "scenario_id": str,      # 场景 ID
-  "description": str       # 场景描述（模拟真实用户提问）
+  "scenario_id": "string",
+  "description": "string"
+}
+```
+
+### TaskSubmitResponse (任务提交响应)
+
+```json
+{
+  "task_id": "uuid",
+  "status": "pending",
+  "message": "string"
+}
+```
+
+### TaskStatusResponse (任务状态响应)
+
+```json
+{
+  "task_id": "uuid",
+  "task_type": "rank | rank_urls | generate_scenarios | batch_test | batch_run",
+  "status": "pending | processing | completed | failed",
+  "created_at": "datetime",
+  "result": {},
+  "error": "string | null"
+}
+```
+
+**任务状态说明**:
+| 状态 | 说明 |
+|------|------|
+| `pending` | 任务已提交，等待处理 |
+| `processing` | 正在执行中 |
+| `completed` | 执行成功 |
+| `failed` | 执行失败 |
+
+### WebhookPayload (Webhook 回调载荷)
+
+```json
+{
+  "task_id": "uuid",
+  "task_type": "string",
+  "status": "completed | failed",
+  "timestamp": "datetime",
+  "error": "string | null"
 }
 ```
 
 ### BatchRankingResult (批量测试结果)
 
-```python
+```json
 {
-  "total_tests": int,           # 总测试数
-  "results": {                  # 每个候选项的胜场数
-    "item_1": int,
-    "item_2": int
-  },
-  "win_rate": {                 # 胜率统计
-    "item_1": float,
-    "item_2": float
-  },
-  "scenario_details": [         # 每个场景的详细结果
+  "total_tests": 10,
+  "results": {"item_1": 7, "item_2": 3},
+  "win_rate": {"item_1": 0.7, "item_2": 0.3},
+  "scenario_details": [
     {
-      "scenario_id": str,
-      "scenario_description": str,
-      "winner_id": str,
-      "reasoning": str,
-      "processing_time": float
+      "scenario_id": "s_1",
+      "scenario_description": "...",
+      "winner_id": "item_1",
+      "reasoning": "...",
+      "processing_time": 1.2
     }
   ]
 }
