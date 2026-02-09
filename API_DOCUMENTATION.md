@@ -180,32 +180,6 @@ AI Ranking System 提供基于大语言模型的智能排序服务，支持同�
 
 **请求体**: 与同步版 `/rank` 相同
 
-**Python 示例**:
-```python
-import httpx
-
-# 1. 提交任务
-response = httpx.post(
-    "http://localhost:8000/api/v1/rank/async",
-    params={"webhook_url": "https://your-server.com/callback"},
-    json={
-        "task_description": "选择最佳方案",
-        "candidates": [...]
-    }
-)
-task_id = response.json()["task_id"]
-
-# 2. 轮询状态（如果不使用 Webhook）
-while True:
-    status = httpx.get(f"http://localhost:8000/api/v1/tasks/{task_id}").json()
-    if status["status"] == "completed":
-        break
-    time.sleep(1)
-
-# 3. 获取结果
-result = httpx.get(f"http://localhost:8000/api/v1/tasks/{task_id}/result").json()
-print(result["best_candidate_id"])
-```
 
 ---
 
@@ -265,21 +239,6 @@ print(result["best_candidate_id"])
 }
 ```
 
-**curl 示例**:
-```bash
-# 提交任务
-curl -X POST "http://localhost:8000/api/v1/batch/run/async?webhook_url=https://your-server.com/callback" \
-  -H "Content-Type: application/json" \
-  -d '{"candidates": [...], "num_scenarios": 5}'
-
-# 响应: {"task_id": "xxx", "status": "pending", ...}
-
-# 查询状态
-curl http://localhost:8000/api/v1/tasks/xxx
-
-# 获取结果
-curl http://localhost:8000/api/v1/tasks/xxx/result
-```
 
 ---
 
