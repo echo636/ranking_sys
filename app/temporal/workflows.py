@@ -1,7 +1,7 @@
 """
 Temporal Workflows
 
-Workflow 只做编排逻辑（确定性代码），所有有副作用的操作都委托给 Activity。
+Workflow 只做编排逻辑，所有有副作用的操作都委托给 Activity。
 
 Temporal 规则：
 - Workflow 代码必须是确定性的

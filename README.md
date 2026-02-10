@@ -1,202 +1,124 @@
-# AI Ranking System
+# AI Ranking System with Temporal
 
-基于大语言模型的智能排序系统，提供单次排序、URL 对比和批量对抗测试功能。
+基于 LLM 的智能排序系统，集成 Temporal 分布式任务队列。
 
-## 功能特性
+## 核心功能
 
-### 1. 单次排序 API
-根据任务描述，从多个候选项中选出最佳选择。
+1. **单次排名 (Ranking)**: 对给定的候选项列表进行 LLM 排序。
+2. **URL 排名 (URL Ranking)**: 自动抓取 URL 内容并进行 LLM 排序。
+3. **批量对抗测试 (Batch Ranking)**:
+   - 自动生成多样化测试场景
+   - 并行执行大规模对抗测试
+   - 统计胜率和排名结果
+4. **分布式异步任务**: 使用 Temporal 编排长耗时任务，支持水平扩展。
 
-### 2. URL 对比 API
-自动抓取网页内容并进行智能对比评估。
+## 技术栈
 
-### 3. 批量对抗测试系统 
-- **场景生成**：自动生成多样化测试场景或使用自定义模板
-- **批量测试**：并发执行多个场景测试，统计胜率
-- **实时进度**：WebSocket 实时推送测试进度
-- **URL 自动抓取**：候选项可直接使用 URL，自动抓取网页内容
-- **前端界面**：可视化操作界面，支持图表展示
+- **Backend**: FastAPI, Pydantic, Uvicorn
+- **Workflow Engine**: Temporal IO (Python SDK)
+- **LLM**: OpenAI / DeepSeek (兼容接口)
+- **Scraper**: aiohttp, BeautifulSoup, readability-lxml
 
 ## 快速开始
 
-### 安装依赖
+### 1. 环境准备
+
+确保已安装 Python 3.9+ 和 Temporal CLI。
 
 ```bash
+# 安装依赖
 pip install -r requirements.txt
 ```
 
-### 配置环境变量
-
-创建 `.env` 文件：
+### 2. 启动 Temporal Server
 
 ```bash
-LLM_API_KEY=your_api_key_here
-LLM_BASE_URL=https://api.openai.com/v1
-MODEL_NAME=gpt-4
-
-# 或使用其他 OpenAI 兼容 API
-# LLM_BASE_URL=https://api.deepseek.com/v1
-# MODEL_NAME=deepseek-chat
+temporal server start-dev
+# Web UI: http://localhost:8233
 ```
 
-### 启动服务
+### 3. 配置环境变量
 
+复制 `.env.example` 为 `.env` 并填入 API Key：
+
+```ini
+LLM_API_KEY=sk-xxxx
+LLM_BASE_URL=https://api.deepseek.com/v1  # 可选
+TEMPORAL_HOST=localhost:7233
+```
+
+### 4. 启动服务
+
+**终端 1: 启动 Worker** (处理业务逻辑)
 ```bash
-uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+python -m app.temporal.worker
 ```
 
-### 访问服务
-
-- **前端界面**: http://localhost:8000/frontend/
-- **API 文档**: http://localhost:8000/docs
-- **批量测试**: http://localhost:8000/frontend/batch_ranking.html
-
-## API 使用示例
-
-### 单次排序
-
-```python
-import httpx
-
-async with httpx.AsyncClient() as client:
-    response = await client.post(
-        "http://localhost:8000/api/v1/rank",
-        json={
-            "task_description": "我想学习 Web 开发",
-            "candidates": [
-                {
-                    "id": "react",
-                    "name": "React",
-                    "info": {"description": "由 Facebook 开发的 UI 库"}
-                },
-                {
-                    "id": "vue",
-                    "name": "Vue.js",
-                    "info": {"description": "渐进式 JavaScript 框架"}
-                }
-            ]
-        }
-    )
-    print(response.json())
-```
-
-### 批量对抗测试（URL 模式）
-
-```python
-# 1. 生成场景（候选项使用 URL）
-scenarios_response = await client.post(
-    "http://localhost:8000/api/v1/batch/generate-scenarios",
-    json={
-        "candidates": [
-            {
-                "id": "blog_1",
-                "name": "阮一峰的网络日志",
-                "info": {"url": "https://www.ruanyifeng.com/blog/"}
-            },
-            {
-                "id": "blog_2",
-                "name": "廖雪峰的官方网站",
-                "info": {"url": "https://www.liaoxuefeng.com/"}
-            }
-        ],
-        "num_scenarios": 10
-    }
-)
-
-# 2. 执行批量测试（自动抓取 URL 内容）
-test_response = await client.post(
-    "http://localhost:8000/api/v1/batch/start-tests",
-    json={
-        "candidates": candidates,
-        "scenarios": scenarios_response.json()["scenarios"]
-    }
-)
-
-print(f"胜率: {test_response.json()['win_rate']}")
-```
-
-### 自定义查询模板
-
-```python
-response = await client.post(
-    "http://localhost:8000/api/v1/batch/generate-scenarios",
-    json={
-        "candidates": candidates,
-        "num_scenarios": 10,
-        "custom_query": "我是{用户类型}，目标是{具体目标}，应该选择哪个？"
-    }
-)
-```
-
-## 测试脚本
-
-项目提供了多个测试脚本：
-
+**终端 2: 启动 API Server** (接收请求)
 ```bash
-# 单次排序测试
-python scripts/test_ranking.py
-
-# 批量对抗测试
-python scripts/test_batch_backend.py
-
-# 自定义模板测试
-python scripts/test_custom_query.py
-
-# URL 自动抓取测试
-python scripts/test_url_batch.py
+uvicorn app.main:app --reload
 ```
+
+## API 文档
+
+### 同步接口 (立即返回结果)
+
+| 方法 | 路径 | 描述 |
+|------|------|------|
+| POST | `/api/v1/ranking/rank` | 单次文本排名 |
+| POST | `/api/v1/ranking/rank-urls` | URL 内容排名 |
+| POST | `/api/v1/batch/generate-scenarios` | 生成测试场景 |
+| POST | `/api/v1/batch/start-tests` | 执行批量测试 |
+
+### 异步接口 (Temporal Workflow)
+
+所有异步接口立即返回 `task_id` (即 Workflow ID)，适用于长耗时任务。
+
+| 方法 | 路径 | 描述 |
+|------|------|------|
+| POST | `/api/v1/ranking/rank/async` | 异步单次排名 |
+| POST | `/api/v1/ranking/rank-urls/async` | 异步 URL 排名 |
+| POST | `/api/v1/batch/run/async` | **一键式批量测试** (生成场景+抓取+排名) |
+| GET  | `/api/v1/tasks/{task_id}` | 查询任务状态 |
+| GET  | `/api/v1/tasks/{task_id}/result` | 获取任务结果 |
+
+#### 异步任务状态查询示例
+
+1. **提交任务**:
+   ```http
+   POST /api/v1/batch/run/async
+   {
+       "candidates": [...],
+       "num_scenarios": 5
+   }
+   ```
+   *Response*: `{"task_id": "batch-run-uuid...", "status": "pending"}`
+
+2. **查询状态**:
+   ```http
+   GET /api/v1/tasks/batch-run-uuid...
+   ```
+   *Response*: `{"status": "processing"}` -> `{"status": "completed"}`
+
+3. **获取结果**:
+   ```http
+   GET /api/v1/tasks/batch-run-uuid.../result
+   ```
 
 ## 项目结构
 
 ```
 ranking_sys/
 ├── app/
-│   ├── api/v1/endpoints/      # API 端点
-│   │   ├── ranking.py         # 单次排序 & URL 对比
-│   │   └── batch_ranking.py   # 批量测试
-│   ├── services/              # 业务逻辑
-│   │   ├── llm_service.py     # LLM 调用服务
-│   │   ├── web_scraper.py     # 网页抓取服务
-│   │   ├── url_fetch_service.py    # URL 自动抓取
-│   │   ├── prompt_generator.py     # 场景生成服务
-│   │   └── batch_processor.py      # 批量处理服务
-│   └── schemas/               # 数据模型
-├── frontend/                  # 前端界面
-│   ├── index.html            # 单次排序界面
-│   └── batch_ranking.html    # 批量测试界面
-├── scripts/                   # 测试脚本
-└── API_DOCUMENTATION.md       # 完整 API 文档
+│   ├── api/            # FastAPI 路由
+│   ├── core/           # 配置
+│   ├── services/       # 业务逻辑服务 (LLM, Scraper...)
+│   ├── temporal/       # Temporal 相关代码
+│   │   ├── activities.py       # Activity 定义
+│   │   ├── workflows.py        # Workflow 定义
+│   │   ├── worker.py           # Worker 入口
+│   │   └── temporal_models.py  # 数据模型
+│   └── main.py         # App 入口
+├── scripts/            # 测试脚本
+└── requirements.txt
 ```
-
-## 核心功能说明
-
-### 批量对抗测试
-
-批量对抗测试系统可以：
-1. 自动生成多样化的用户场景
-2. 在每个场景下测试候选项的表现
-3. 统计胜率和详细结果
-4. 可视化展示对比数据
-
-
-### URL 自动抓取
-
-支持直接使用 URL 作为候选项：
-- 系统自动抓取网页内容
-- 提取标题、描述和正文
-
-
-### 自定义查询模板
-
-灵活定义场景生成模板：
-- 使用占位符（如 `{用户类型}`）
-- AI 自动生成多样化变体
-
-
-
-## API 文档
-
-查看完整 API 文档：
-- **在线文档**: http://localhost:8000/docs
-- **离线文档**: [API_DOCUMENTATION.md](./API_DOCUMENTATION.md)
-

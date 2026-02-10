@@ -153,7 +153,10 @@ AI Ranking System 提供基于大语言模型的智能排序服务，支持同�
 
 ### 4. 异步任务 API
 
+### 4. 异步任务 API
+
 异步 API 适用于长时间运行的任务。提交后立即返回任务 ID，通过 **轮询** 或 **Webhook 回调** 获取结果。
+**注意**：`task_id` 即为 Temporal 的 **Workflow ID**。
 
 **使用场景**：
 - 需要立即响应用户，后台处理任务
@@ -246,17 +249,17 @@ AI Ranking System 提供基于大语言模型的智能排序服务，支持同�
 
 #### 5.1 `GET /api/v1/tasks/{task_id}`
 
-获取任务当前状态。
+获取任务（Temporal Workflow）当前状态。
 
 **响应**:
 ```json
 {
-  "task_id": "fd86bc84-...",
-  "task_type": "rank",
+  "task_id": "batch-run-uuid...",
   "status": "completed",
-  "created_at": "2026-02-09T13:09:30.560000",
-  "result": {...},
-  "error": null
+  "workflow_type": "BatchRankingWorkflow",
+  "start_time": "2026-02-11T12:00:00+00:00",
+  "close_time": "2026-02-11T12:00:10+00:00",
+  "result": {...}
 }
 ```
 
@@ -264,7 +267,10 @@ AI Ranking System 提供基于大语言模型的智能排序服务，支持同�
 
 获取已完成任务的结果。
 
-**错误响应**: `404` 任务不存在 | `400` 任务未完成
+**错误响应**: 
+- `404` 任务不存在 
+- `202` 任务进行中 (Processing)
+- `500` 任务执行失败
 
 ---
 
@@ -329,21 +335,21 @@ AI Ranking System 提供基于大语言模型的智能排序服务，支持同�
 ```json
 {
   "task_id": "uuid",
-  "task_type": "rank | rank_urls | generate_scenarios | batch_test | batch_run",
   "status": "pending | processing | completed | failed",
-  "created_at": "datetime",
-  "result": {},
-  "error": "string | null"
+  "workflow_type": "BatchRankingWorkflow | SingleRankWorkflow | URLRankWorkflow",
+  "start_time": "datetime",
+  "close_time": "datetime | null",
+  "result": {}
 }
 ```
 
 **任务状态说明**:
 | 状态 | 说明 |
 |------|------|
-| `pending` | 任务已提交，等待处理 |
-| `processing` | 正在执行中 |
+| `pending` | 任务已提交，等待 Worker 获取 |
+| `processing` | 正在执行中 (Running) |
 | `completed` | 执行成功 |
-| `failed` | 执行失败 |
+| `failed` | 执行失败 (Failed / Canceled / Terminated / TimedOut) |
 
 ### WebhookPayload (Webhook 回调载荷)
 
@@ -375,4 +381,3 @@ AI Ranking System 提供基于大语言模型的智能排序服务，支持同�
   ]
 }
 ```
-
