@@ -1,12 +1,10 @@
-from fastapi import APIRouter, HTTPException, Depends, BackgroundTasks
+from fastapi import APIRouter, HTTPException, Depends
 from typing import Optional
 from datetime import datetime
 
 from app.schemas.ranking import RankingRequest, RankingResponse, URLRankingRequest, Candidate, CandidateInfo
 from app.schemas.task import TaskSubmitResponse, TaskStatus, TaskType
 from app.services.llm_service import LLMService
-from app.services.task_store import get_task_store
-from app.services.webhook_service import webhook_service
 
 router = APIRouter()
 
@@ -102,19 +100,18 @@ async def rank_urls(
         raise HTTPException(status_code=500, detail=f"URL ranking failed: {str(e)}")
 
 
-# ========== 异步端点 ==========
+# ========== 异步端点 (Temporal) ==========
 
 @router.post("/rank/async", response_model=TaskSubmitResponse)
 async def rank_candidates_async(
     request: RankingRequest,
-    background_tasks: BackgroundTasks,
     webhook_url: Optional[str] = None
 ):
     """
-    异步排序接口
+    异步排序接口 (Temporal Workflow)
     
-    - 立即返回 task_id
-    - 后台执行 LLM 排序
+    - 立即返回 task_id (即 Temporal Workflow ID)
+    - Worker 进程执行 LLM 排序
     - 完成后调用 webhook_url（如提供）
     
     使用方法:
@@ -122,204 +119,79 @@ async def rank_candidates_async(
     2. 等待 webhook 通知或轮询 /tasks/{task_id}
     3. 从 /tasks/{task_id}/result 获取结果
     """
-    task_store = get_task_store()
-    
-    # 创建任务
-    task_id = await task_store.create_task(
-        task_type=TaskType.RANK,
-        request_data=request.model_dump(),
-        webhook_url=webhook_url
+    from app.temporal.client import get_temporal_client
+    from app.temporal.workflows import SingleRankWorkflow
+    from app.temporal.temporal_models import SingleRankWorkflowInput, CandidateData
+    from app.core.config import settings
+    import uuid
+
+    client = await get_temporal_client()
+
+    # 转换候选项为 dataclass
+    candidates_data = [
+        CandidateData(id=c.id, name=c.name, info=c.info.model_dump())
+        for c in request.candidates
+    ]
+
+    workflow_id = f"rank-{uuid.uuid4()}"
+
+    # 启动 Temporal Workflow
+    await client.start_workflow(
+        SingleRankWorkflow.run,
+        SingleRankWorkflowInput(
+            task_description=request.task_description,
+            candidates=candidates_data,
+            webhook_url=webhook_url,
+        ),
+        id=workflow_id,
+        task_queue=settings.TEMPORAL_TASK_QUEUE,
     )
-    
-    # 提交后台任务
-    background_tasks.add_task(
-        _execute_rank_task,
-        task_id,
-        request,
-        webhook_url
-    )
-    
+
     return TaskSubmitResponse(
-        task_id=task_id,
+        task_id=workflow_id,
         status=TaskStatus.PENDING,
-        message="排序任务已提交",
+        message="排序任务已提交到 Temporal",
         created_at=datetime.utcnow()
     )
-
-
-async def _execute_rank_task(
-    task_id: str,
-    request: RankingRequest,
-    webhook_url: Optional[str]
-):
-    """后台执行排序任务"""
-    task_store = get_task_store()
-    
-    try:
-        # 更新状态为处理中
-        await task_store.update_status(task_id, TaskStatus.PROCESSING)
-        
-        # 执行排序
-        service = LLMService()
-        result = await service.rank_candidates(
-            task_description=request.task_description,
-            candidates=request.candidates
-        )
-        
-        # 保存结果
-        await task_store.update_status(
-            task_id,
-            TaskStatus.COMPLETED,
-            result=result.model_dump()
-        )
-        
-        # 发送 Webhook
-        if webhook_url:
-            await webhook_service.send_notification(
-                webhook_url=webhook_url,
-                task_id=task_id,
-                task_type=TaskType.RANK,
-                status=TaskStatus.COMPLETED
-            )
-            
-    except Exception as e:
-        await task_store.update_status(
-            task_id,
-            TaskStatus.FAILED,
-            error=str(e)
-        )
-        
-        if webhook_url:
-            await webhook_service.send_notification(
-                webhook_url=webhook_url,
-                task_id=task_id,
-                task_type=TaskType.RANK,
-                status=TaskStatus.FAILED,
-                error=str(e)
-            )
 
 
 @router.post("/rank-urls/async", response_model=TaskSubmitResponse)
 async def rank_urls_async(
     request: URLRankingRequest,
-    background_tasks: BackgroundTasks,
     webhook_url: Optional[str] = None
 ):
     """
-    异步 URL 对比接口
+    异步 URL 对比接口 (Temporal Workflow)
     
-    - 立即返回 task_id
-    - 后台抓取网页并执行 LLM 排序
+    - 立即返回 task_id (即 Temporal Workflow ID)
+    - Worker 进程抓取网页并执行 LLM 排序
     - 完成后调用 webhook_url（如提供）
     """
-    task_store = get_task_store()
-    
-    task_id = await task_store.create_task(
-        task_type=TaskType.RANK_URLS,
-        request_data=request.model_dump(),
-        webhook_url=webhook_url
+    from app.temporal.client import get_temporal_client
+    from app.temporal.workflows import URLRankWorkflow
+    from app.temporal.temporal_models import URLRankWorkflowInput
+    from app.core.config import settings
+    import uuid
+
+    client = await get_temporal_client()
+
+    workflow_id = f"rank-urls-{uuid.uuid4()}"
+
+    await client.start_workflow(
+        URLRankWorkflow.run,
+        URLRankWorkflowInput(
+            task_description=request.task_description,
+            urls=request.urls,
+            webhook_url=webhook_url,
+        ),
+        id=workflow_id,
+        task_queue=settings.TEMPORAL_TASK_QUEUE,
     )
-    
-    background_tasks.add_task(
-        _execute_rank_urls_task,
-        task_id,
-        request,
-        webhook_url
-    )
-    
+
     return TaskSubmitResponse(
-        task_id=task_id,
+        task_id=workflow_id,
         status=TaskStatus.PENDING,
-        message="URL 对比任务已提交",
+        message="URL 对比任务已提交到 Temporal",
         created_at=datetime.utcnow()
     )
 
-
-async def _execute_rank_urls_task(
-    task_id: str,
-    request: URLRankingRequest,
-    webhook_url: Optional[str]
-):
-    """后台执行 URL 排序任务"""
-    from app.services.web_scraper import WebScraperService
-    
-    task_store = get_task_store()
-    
-    try:
-        await task_store.update_status(task_id, TaskStatus.PROCESSING)
-        
-        # 爬取 URL
-        scraper = WebScraperService(timeout=10)
-        pages = await scraper.scrape_urls(request.urls)
-        
-        if not pages:
-            raise Exception("无法爬取任何网页")
-        
-        # 转换为 Candidate 格式
-        candidates = []
-        for i, page in enumerate(pages):
-            if page.get("status") == "error":
-                candidates.append(
-                    Candidate(
-                        id=f"url_{i}",
-                        name=f"{page['title']} (爬取失败)",
-                        info=CandidateInfo(
-                            category="网页",
-                            description=page["content"]
-                        )
-                    )
-                )
-            else:
-                candidates.append(
-                    Candidate(
-                        id=f"url_{i}",
-                        name=page["title"],
-                        info=CandidateInfo(
-                            category="网页",
-                            description=f"URL: {page['url']}\n\n{page.get('description', '')}\n\n{page['content']}"
-                        )
-                    )
-                )
-        
-        # 调用 LLM 排序
-        service = LLMService()
-        result = await service.rank_candidates(
-            task_description=request.task_description,
-            candidates=candidates
-        )
-        
-        # 映射回实际 URL
-        for i, page in enumerate(pages):
-            if result.best_candidate_id == f"url_{i}":
-                result.best_candidate_id = page["url"]
-                break
-        
-        await task_store.update_status(
-            task_id,
-            TaskStatus.COMPLETED,
-            result=result.model_dump()
-        )
-        
-        if webhook_url:
-            await webhook_service.send_notification(
-                webhook_url=webhook_url,
-                task_id=task_id,
-                task_type=TaskType.RANK_URLS,
-                status=TaskStatus.COMPLETED
-            )
-            
-    except Exception as e:
-        await task_store.update_status(
-            task_id,
-            TaskStatus.FAILED,
-            error=str(e)
-        )
-        
-        if webhook_url:
-            await webhook_service.send_notification(
-                webhook_url=webhook_url,
-                task_id=task_id,
-                task_type=TaskType.RANK_URLS,
-                status=TaskStatus.FAILED,
-                error=str(e)
-            )

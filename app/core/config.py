@@ -18,6 +18,11 @@ class Settings(BaseSettings):
     # Redis for async task storage (optional, falls back to memory)
     REDIS_URL: Optional[str] = None
     
+    # Temporal Settings
+    TEMPORAL_HOST: str = "localhost:7233"
+    TEMPORAL_NAMESPACE: str = "default"
+    TEMPORAL_TASK_QUEUE: str = "ranking-sys-queue"
+    
     class Config:
         case_sensitive = True
         env_file = ".env"

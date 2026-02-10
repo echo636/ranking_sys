@@ -1,51 +1,79 @@
 """
-任务管理端点
+任务管理端点 (Temporal)
 
-提供任务状态查询和结果获取接口。
+通过 Temporal Client 查询 Workflow 状态和结果。
+task_id 即 Temporal Workflow ID。
 """
 
 from fastapi import APIRouter, HTTPException
-from app.services.task_store import get_task_store
-from app.schemas.task import TaskStatusResponse, TaskStatus, TaskType
+from temporalio.client import WorkflowExecutionStatus
+from temporalio.service import RPCError
+
+from app.temporal.client import get_temporal_client
 
 router = APIRouter()
 
 
-@router.get("/{task_id}", response_model=TaskStatusResponse)
+def _map_temporal_status(status: WorkflowExecutionStatus) -> str:
+    """将 Temporal Workflow 状态映射为 API 状态"""
+    mapping = {
+        WorkflowExecutionStatus.RUNNING: "processing",
+        WorkflowExecutionStatus.COMPLETED: "completed",
+        WorkflowExecutionStatus.FAILED: "failed",
+        WorkflowExecutionStatus.CANCELED: "failed",
+        WorkflowExecutionStatus.TERMINATED: "failed",
+        WorkflowExecutionStatus.CONTINUED_AS_NEW: "processing",
+        WorkflowExecutionStatus.TIMED_OUT: "failed",
+    }
+    return mapping.get(status, "processing")
+
+
+@router.get("/{task_id}")
 async def get_task_status(task_id: str):
     """
-    查询任务状态
+    查询任务状态 (Temporal Workflow)
     
-    - **task_id**: 任务 ID（提交任务时返回的 ID）
+    - **task_id**: Workflow ID（提交任务时返回的 ID）
     
-    返回任务的当前状态、创建时间、完成时间等信息。
-    如果任务已完成，也会返回结果。
+    返回任务的当前状态。
     """
-    task_store = get_task_store()
-    task = await task_store.get_task(task_id)
-    
-    if not task:
+    client = await get_temporal_client()
+
+    try:
+        handle = client.get_workflow_handle(task_id)
+        desc = await handle.describe()
+    except RPCError:
         raise HTTPException(status_code=404, detail="任务不存在")
-    
-    return TaskStatusResponse(
-        task_id=task["task_id"],
-        task_type=TaskType(task["task_type"]),
-        status=TaskStatus(task["status"]),
-        created_at=task["created_at"],
-        completed_at=task.get("completed_at"),
-        error=task.get("error"),
-        result=task.get("result") if task["status"] == "completed" else None
-    )
+
+    status = _map_temporal_status(desc.status)
+
+    response = {
+        "task_id": task_id,
+        "status": status,
+        "workflow_type": desc.workflow_type,
+        "start_time": desc.start_time.isoformat() if desc.start_time else None,
+        "close_time": desc.close_time.isoformat() if desc.close_time else None,
+    }
+
+    # 如果已完成，尝试获取结果
+    if status == "completed":
+        try:
+            result = await handle.result()
+            response["result"] = result
+        except Exception:
+            pass
+
+    return response
 
 
 @router.get("/{task_id}/result")
 async def get_task_result(task_id: str):
     """
-    获取任务结果
+    获取任务结果 (Temporal Workflow)
     
-    - **task_id**: 任务 ID
+    - **task_id**: Workflow ID
     
-    只有当任务状态为 completed 时才返回结果。
+    只有当 Workflow 状态为 completed 时才返回结果。
     
     状态码说明:
     - 200: 任务完成，返回结果
@@ -53,31 +81,34 @@ async def get_task_result(task_id: str):
     - 404: 任务不存在
     - 500: 任务执行失败
     """
-    task_store = get_task_store()
-    task = await task_store.get_task(task_id)
-    
-    if not task:
+    client = await get_temporal_client()
+
+    try:
+        handle = client.get_workflow_handle(task_id)
+        desc = await handle.describe()
+    except RPCError:
         raise HTTPException(status_code=404, detail="任务不存在")
-    
-    status = TaskStatus(task["status"])
-    
-    if status == TaskStatus.PENDING:
+
+    status = _map_temporal_status(desc.status)
+
+    if status == "processing":
         raise HTTPException(
-            status_code=202, 
-            detail="任务等待中，请稍后重试"
-        )
-    
-    if status == TaskStatus.PROCESSING:
-        raise HTTPException(
-            status_code=202, 
+            status_code=202,
             detail="任务处理中，请稍后重试"
         )
-    
-    if status == TaskStatus.FAILED:
+
+    if status == "failed":
         raise HTTPException(
-            status_code=500, 
-            detail=task.get("error", "任务执行失败")
+            status_code=500,
+            detail="任务执行失败"
         )
-    
-    # completed
-    return task["result"]
+
+    # completed - 获取 Workflow 返回值
+    try:
+        result = await handle.result()
+        return result
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"获取结果失败: {str(e)}"
+        )

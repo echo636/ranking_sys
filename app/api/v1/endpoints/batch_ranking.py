@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException, WebSocket, WebSocketDisconnect
 from typing import List, Dict, Optional
 from datetime import datetime
 
@@ -13,8 +13,6 @@ from app.schemas.task import TaskSubmitResponse, TaskStatus, TaskType
 from app.services.llm_service import LLMService
 from app.services.prompt_generator import PromptGeneratorService
 from app.services.batch_processor import BatchProcessorService
-from app.services.task_store import get_task_store
-from app.services.webhook_service import webhook_service
 from app.api.v1.endpoints.ranking import get_llm_service
 
 router = APIRouter()
@@ -113,302 +111,151 @@ async def websocket_endpoint(websocket: WebSocket, session_id: str):
         manager.disconnect(session_id)
 
 
-# ========== 异步端点 ==========
+# ========== 异步端点 (Temporal) ==========
 
 @router.post("/generate-scenarios/async", response_model=TaskSubmitResponse)
 async def generate_scenarios_async(
     request: BatchRankingRequest,
-    background_tasks: BackgroundTasks,
     webhook_url: Optional[str] = None
 ):
     """
-    异步场景生成接口
+    异步场景生成接口 (Temporal Workflow)
     
-    - 立即返回 task_id
-    - 后台执行场景生成
+    - 立即返回 task_id (即 Temporal Workflow ID)
+    - Worker 进程执行场景生成
     - 完成后调用 webhook_url（如提供）
     """
-    task_store = get_task_store()
-    
-    task_id = await task_store.create_task(
-        task_type=TaskType.BATCH_GENERATE,
-        request_data=request.model_dump(),
-        webhook_url=webhook_url
+    from app.temporal.client import get_temporal_client
+    from app.temporal.workflows import BatchRankingWorkflow
+    from app.temporal.temporal_models import BatchRankingWorkflowInput, CandidateData
+    from app.core.config import settings
+    import uuid
+
+    client = await get_temporal_client()
+
+    candidates_data = [
+        CandidateData(id=c.id, name=c.name, info=c.info.model_dump())
+        for c in request.candidates
+    ]
+
+    workflow_id = f"batch-gen-{uuid.uuid4()}"
+
+    # 复用 BatchRankingWorkflow，只做场景生成阶段
+    # 注：完整 Workflow 会自动生成场景并执行测试
+    # 如果需要只做场景生成，可以后续拆分为独立 Workflow
+    await client.start_workflow(
+        BatchRankingWorkflow.run,
+        BatchRankingWorkflowInput(
+            candidates=candidates_data,
+            num_scenarios=request.num_scenarios,
+            custom_query=request.custom_query,
+            webhook_url=webhook_url,
+        ),
+        id=workflow_id,
+        task_queue=settings.TEMPORAL_TASK_QUEUE,
     )
-    
-    background_tasks.add_task(
-        _execute_generate_scenarios_task,
-        task_id,
-        request,
-        webhook_url
-    )
-    
+
     return TaskSubmitResponse(
-        task_id=task_id,
+        task_id=workflow_id,
         status=TaskStatus.PENDING,
-        message="场景生成任务已提交",
+        message="场景生成任务已提交到 Temporal",
         created_at=datetime.utcnow()
     )
-
-
-async def _execute_generate_scenarios_task(
-    task_id: str,
-    request: BatchRankingRequest,
-    webhook_url: Optional[str]
-):
-    """后台执行场景生成任务"""
-    task_store = get_task_store()
-    
-    try:
-        await task_store.update_status(task_id, TaskStatus.PROCESSING)
-        
-        service = LLMService()
-        generator = PromptGeneratorService(service)
-        scenarios = await generator.generate_scenarios(
-            candidates=request.candidates,
-            num_scenarios=request.num_scenarios,
-            custom_query=request.custom_query
-        )
-        
-        result = {"scenarios": [s.model_dump() for s in scenarios]}
-        
-        await task_store.update_status(
-            task_id,
-            TaskStatus.COMPLETED,
-            result=result
-        )
-        
-        if webhook_url:
-            await webhook_service.send_notification(
-                webhook_url=webhook_url,
-                task_id=task_id,
-                task_type=TaskType.BATCH_GENERATE,
-                status=TaskStatus.COMPLETED
-            )
-            
-    except Exception as e:
-        await task_store.update_status(
-            task_id,
-            TaskStatus.FAILED,
-            error=str(e)
-        )
-        
-        if webhook_url:
-            await webhook_service.send_notification(
-                webhook_url=webhook_url,
-                task_id=task_id,
-                task_type=TaskType.BATCH_GENERATE,
-                status=TaskStatus.FAILED,
-                error=str(e)
-            )
 
 
 @router.post("/start-tests/async", response_model=TaskSubmitResponse)
 async def start_tests_async(
     request: BatchTestRequest,
-    background_tasks: BackgroundTasks,
     webhook_url: Optional[str] = None
 ):
     """
-    异步批量测试接口
+    异步批量测试接口 (Temporal Workflow)
     
-    - 立即返回 task_id
-    - 后台执行批量测试（支持 URL 自动抓取）
+    - 立即返回 task_id (即 Temporal Workflow ID)
+    - Worker 进程执行批量测试（支持 URL 自动抓取）
     - 完成后调用 webhook_url（如提供）
     """
-    task_store = get_task_store()
-    
-    task_id = await task_store.create_task(
-        task_type=TaskType.BATCH_TEST,
-        request_data=request.model_dump(),
-        webhook_url=webhook_url
+    from app.temporal.client import get_temporal_client
+    from app.temporal.workflows import BatchRankingWorkflow
+    from app.temporal.temporal_models import BatchRankingWorkflowInput, CandidateData
+    from app.core.config import settings
+    import uuid
+
+    client = await get_temporal_client()
+
+    candidates_data = [
+        CandidateData(id=c.id, name=c.name, info=c.info.model_dump())
+        for c in request.candidates
+    ]
+
+    workflow_id = f"batch-test-{uuid.uuid4()}"
+
+    await client.start_workflow(
+        BatchRankingWorkflow.run,
+        BatchRankingWorkflowInput(
+            candidates=candidates_data,
+            num_scenarios=len(request.scenarios),
+            webhook_url=webhook_url,
+        ),
+        id=workflow_id,
+        task_queue=settings.TEMPORAL_TASK_QUEUE,
     )
-    
-    background_tasks.add_task(
-        _execute_start_tests_task,
-        task_id,
-        request,
-        webhook_url
-    )
-    
+
     return TaskSubmitResponse(
-        task_id=task_id,
+        task_id=workflow_id,
         status=TaskStatus.PENDING,
-        message="批量测试任务已提交",
+        message="批量测试任务已提交到 Temporal",
         created_at=datetime.utcnow()
     )
-
-
-async def _execute_start_tests_task(
-    task_id: str,
-    request: BatchTestRequest,
-    webhook_url: Optional[str]
-):
-    """后台执行批量测试任务"""
-    from app.services.url_fetch_service import URLFetchService
-    
-    task_store = get_task_store()
-    
-    try:
-        await task_store.update_status(task_id, TaskStatus.PROCESSING)
-        
-        # URL 自动抓取
-        url_service = URLFetchService()
-        enriched_candidates = await url_service.enrich_candidates_with_urls(
-            request.candidates
-        )
-        
-        # 执行批量测试
-        service = LLMService()
-        processor = BatchProcessorService(service)
-        
-        result = await processor.run_batch_ranking(
-            candidates=enriched_candidates,
-            scenarios=request.scenarios,
-            progress_callback=None  # 异步模式不支持 WebSocket 进度
-        )
-        
-        await task_store.update_status(
-            task_id,
-            TaskStatus.COMPLETED,
-            result=result.model_dump()
-        )
-        
-        if webhook_url:
-            await webhook_service.send_notification(
-                webhook_url=webhook_url,
-                task_id=task_id,
-                task_type=TaskType.BATCH_TEST,
-                status=TaskStatus.COMPLETED
-            )
-            
-    except Exception as e:
-        await task_store.update_status(
-            task_id,
-            TaskStatus.FAILED,
-            error=str(e)
-        )
-        
-        if webhook_url:
-            await webhook_service.send_notification(
-                webhook_url=webhook_url,
-                task_id=task_id,
-                task_type=TaskType.BATCH_TEST,
-                status=TaskStatus.FAILED,
-                error=str(e)
-            )
 
 
 @router.post("/run/async", response_model=TaskSubmitResponse)
 async def batch_run_async(
     request: BatchRankingRequest,
-    background_tasks: BackgroundTasks,
     webhook_url: Optional[str] = None
 ):
     """
-    一键式批量测试接口（合并端点）
+    一键式批量测试接口 (Temporal Workflow)
     
     自动执行：
     1. 生成测试场景
-    2. 执行批量测试
+    2. 抓取 URL 内容
+    3. 执行批量测试
     
-    - 立即返回 task_id
-    - 后台完成全部流程
+    - 立即返回 task_id (即 Temporal Workflow ID)
+    - Worker 进程完成全部流程
     - 完成后调用 webhook_url（如提供）
     """
-    task_store = get_task_store()
-    
-    task_id = await task_store.create_task(
-        task_type=TaskType.BATCH_RUN,
-        request_data=request.model_dump(),
-        webhook_url=webhook_url
+    from app.temporal.client import get_temporal_client
+    from app.temporal.workflows import BatchRankingWorkflow
+    from app.temporal.temporal_models import BatchRankingWorkflowInput, CandidateData
+    from app.core.config import settings
+    import uuid
+
+    client = await get_temporal_client()
+
+    candidates_data = [
+        CandidateData(id=c.id, name=c.name, info=c.info.model_dump())
+        for c in request.candidates
+    ]
+
+    workflow_id = f"batch-run-{uuid.uuid4()}"
+
+    await client.start_workflow(
+        BatchRankingWorkflow.run,
+        BatchRankingWorkflowInput(
+            candidates=candidates_data,
+            num_scenarios=request.num_scenarios,
+            custom_query=request.custom_query,
+            webhook_url=webhook_url,
+        ),
+        id=workflow_id,
+        task_queue=settings.TEMPORAL_TASK_QUEUE,
     )
-    
-    background_tasks.add_task(
-        _execute_batch_run_task,
-        task_id,
-        request,
-        webhook_url
-    )
-    
+
     return TaskSubmitResponse(
-        task_id=task_id,
+        task_id=workflow_id,
         status=TaskStatus.PENDING,
-        message="一键式批量测试任务已提交",
+        message="一键式批量测试任务已提交到 Temporal",
         created_at=datetime.utcnow()
     )
-
-
-async def _execute_batch_run_task(
-    task_id: str,
-    request: BatchRankingRequest,
-    webhook_url: Optional[str]
-):
-    """后台执行一键式批量测试任务"""
-    from app.services.url_fetch_service import URLFetchService
-    
-    task_store = get_task_store()
-    
-    try:
-        await task_store.update_status(task_id, TaskStatus.PROCESSING)
-        
-        service = LLMService()
-        
-        # Step 1: 生成场景
-        generator = PromptGeneratorService(service)
-        scenarios = await generator.generate_scenarios(
-            candidates=request.candidates,
-            num_scenarios=request.num_scenarios,
-            custom_query=request.custom_query
-        )
-        
-        # Step 2: URL 自动抓取
-        url_service = URLFetchService()
-        enriched_candidates = await url_service.enrich_candidates_with_urls(
-            request.candidates
-        )
-        
-        # Step 3: 执行批量测试
-        processor = BatchProcessorService(service)
-        batch_result = await processor.run_batch_ranking(
-            candidates=enriched_candidates,
-            scenarios=scenarios,
-            progress_callback=None
-        )
-        
-        # 合并结果
-        result = {
-            "scenarios": [s.model_dump() for s in scenarios],
-            "batch_result": batch_result.model_dump()
-        }
-        
-        await task_store.update_status(
-            task_id,
-            TaskStatus.COMPLETED,
-            result=result
-        )
-        
-        if webhook_url:
-            await webhook_service.send_notification(
-                webhook_url=webhook_url,
-                task_id=task_id,
-                task_type=TaskType.BATCH_RUN,
-                status=TaskStatus.COMPLETED
-            )
-            
-    except Exception as e:
-        await task_store.update_status(
-            task_id,
-            TaskStatus.FAILED,
-            error=str(e)
-        )
-        
-        if webhook_url:
-            await webhook_service.send_notification(
-                webhook_url=webhook_url,
-                task_id=task_id,
-                task_type=TaskType.BATCH_RUN,
-                status=TaskStatus.FAILED,
-                error=str(e)
-            )
-
