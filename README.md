@@ -12,13 +12,6 @@
    - 统计胜率和排名结果
 4. **分布式异步任务**: 使用 Temporal 编排长耗时任务，支持水平扩展。
 
-## 技术栈
-
-- **Backend**: FastAPI, Pydantic, Uvicorn
-- **Workflow Engine**: Temporal IO (Python SDK)
-- **LLM**: OpenAI / DeepSeek (兼容接口)
-- **Scraper**: aiohttp, BeautifulSoup, readability-lxml
-
 ## 快速开始
 
 ### 1. 环境准备
